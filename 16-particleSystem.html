@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        // Your access token can be found at: https://ion.cesium.com/tokens.
+        // Replace `your_access_token` with your Cesium ion access token.
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            shouldAnimate: true
+        });
+		
+		// https://sandcastle.cesium.com/?src=Particle%20System%20Tails.html&label=All
+		
+		const planePosition = Cesium.Cartesian3.fromDegrees(-75.59777, 40.03883, 800.0);
+		const planePosition2 = Cesium.Cartesian3.fromDegrees(-75.59977, 40.03883, 800.0);
+		const planePosition3 = Cesium.Cartesian3.fromDegrees(-75.60177, 40.03883, 800.0);
+		
+		const particlesOffset = new Cesium.Cartesian3(-8.950115473940969, 34.852766731753945, -30.235411095432937);
+		const cameraLocation = Cesium.Cartesian3.add(planePosition2, particlesOffset, new Cesium.Cartesian3());
+		
+		const resetCamera = function () {
+			viewer.camera.lookAt(cameraLocation, new Cesium.Cartesian3(-450, -300, 200));
+		};
+		resetCamera();
+		
+        // Draw particle image to a canvas
+		let particleCanvas;
+		function getImage() {
+		  if (!Cesium.defined(particleCanvas)) {
+			particleCanvas = document.createElement("canvas");
+			particleCanvas.width = 20;
+			particleCanvas.height = 20;
+			const context2D = particleCanvas.getContext("2d");
+			context2D.beginPath();
+			context2D.arc(8, 8, 8, 0, Cesium.Math.TWO_PI, true);
+			context2D.closePath();
+			context2D.fillStyle = "rgb(255, 255, 255)";
+			context2D.fill();
+		  }
+		  return particleCanvas;
+		}
+		
+		// creating particles model matrix
+		const translationOffset = Cesium.Matrix4.fromTranslation(particlesOffset, new Cesium.Matrix4());
+		const translationOfPlane = Cesium.Matrix4.fromTranslation(planePosition, new Cesium.Matrix4());
+		const particlesModelMatrix = Cesium.Matrix4.multiplyTransformation(translationOfPlane, translationOffset, new Cesium.Matrix4());
+		
+		const translationOffset2 = Cesium.Matrix4.fromTranslation(particlesOffset, new Cesium.Matrix4());
+		const translationOfPlane2 = Cesium.Matrix4.fromTranslation(planePosition2, new Cesium.Matrix4());
+		const particlesModelMatrix2 = Cesium.Matrix4.multiplyTransformation(translationOfPlane2, translationOffset2, new Cesium.Matrix4());
+		
+		const translationOffset3 = Cesium.Matrix4.fromTranslation(particlesOffset, new Cesium.Matrix4());
+		const translationOfPlane3 = Cesium.Matrix4.fromTranslation(planePosition3, new Cesium.Matrix4());
+		const particlesModelMatrix3 = Cesium.Matrix4.multiplyTransformation(translationOfPlane3, translationOffset3, new Cesium.Matrix4());
+		
+		// creating the particle systems
+		const rocketOptions = {
+			numberOfSystems: 10.0,
+			iterationOffset: 0.1,
+			cartographicStep: 0.000001,
+			baseRadius: 0.0005,
+
+			colorOptions: [
+				{
+					minimumRed: 1.0,
+					green: 0.5,
+					minimumBlue: 0.05,
+					alpha: 1.0,
+				},
+				{
+					red: 0.9,
+					minimumGreen: 0.6,
+					minimumBlue: 0.01,
+					alpha: 1.0,
+				},
+				{
+					red: 0.8,
+					green: 0.05,
+					minimumBlue: 0.09,
+					alpha: 1.0,
+				},
+				{
+					minimumRed: 1,
+					minimumGreen: 0.05,
+					blue: 0.09,
+					alpha: 1.0,
+				},
+			],
+		};
+
+		const rocketOptions2 = {
+			numberOfSystems: 50.0,
+			iterationOffset: 0.1,
+			cartographicStep: 0.000001,
+			baseRadius: 0.0005,
+
+			colorOptions: [
+				{
+					minimumRed: 1.0,
+					green: 0.5,
+					minimumBlue: 0.05,
+					alpha: 1.0,
+				},
+				{
+					red: 0.9,
+					minimumGreen: 0.6,
+					minimumBlue: 0.01,
+					alpha: 1.0,
+				},
+				{
+					red: 0.8,
+					green: 0.05,
+					minimumBlue: 0.09,
+					alpha: 1.0,
+				},
+				{
+					minimumRed: 1,
+					minimumGreen: 0.05,
+					blue: 0.09,
+					alpha: 1.0,
+				},
+			],
+		};
+		
+		const cometOptions = {
+			numberOfSystems: 100.0,
+			iterationOffset: 0.003,
+			cartographicStep: 0.0000001,
+			baseRadius: 0.0005,
+
+			colorOptions: [
+				{
+					red: 0.6,
+					green: 0.6,
+					blue: 0.6,
+					alpha: 1.0,
+				},
+				{
+					red: 0.6,
+					green: 0.6,
+					blue: 0.9,
+					alpha: 0.9,
+				},
+				{
+					red: 0.5,
+					green: 0.5,
+					blue: 0.7,
+					alpha: 0.5,
+				},
+			],
+		};
+
+		let scratchCartesian3 = new Cesium.Cartesian3();
+		let scratchCartographic = new Cesium.Cartographic();
+		const forceFunction = function (options, iteration) {
+			return function (particle, dt) {
+				dt = Cesium.Math.clamp(dt, 0.0, 0.05);
+
+				scratchCartesian3 = Cesium.Cartesian3.normalize(particle.position, new Cesium.Cartesian3());
+				scratchCartesian3 = Cesium.Cartesian3.multiplyByScalar(scratchCartesian3, -40.0 * dt, scratchCartesian3);
+				scratchCartesian3 = Cesium.Cartesian3.add(particle.position, scratchCartesian3, scratchCartesian3);
+				scratchCartographic = Cesium.Cartographic.fromCartesian(scratchCartesian3, Cesium.Ellipsoid.WGS84, scratchCartographic);
+
+				const angle = (Cesium.Math.PI * 2.0 * iteration) / options.numberOfSystems;
+				iteration += options.iterationOffset;
+				scratchCartographic.longitude += Math.cos(angle) * options.cartographicStep * 30.0 * dt;
+				scratchCartographic.latitude += Math.sin(angle) * options.cartographicStep * 30.0 * dt;
+
+				particle.position = Cesium.Cartographic.toCartesian(scratchCartographic);
+			};
+		};
+
+		const matrix4Scratch = new Cesium.Matrix4();
+		let scratchAngleForOffset = 0.0;
+		const scratchOffset = new Cesium.Cartesian3();
+		const imageSize = new Cesium.Cartesian2(15.0, 15.0);
+		
+		function createParticleSystems(options, systemsArray, particlesModelMatrix) {
+			const length = options.numberOfSystems;
+			for (let i = 0; i < length; ++i) {
+				scratchAngleForOffset = (Math.PI * 2.0 * i) / options.numberOfSystems;
+				scratchOffset.x += options.baseRadius * Math.cos(scratchAngleForOffset);
+				scratchOffset.y += options.baseRadius * Math.sin(scratchAngleForOffset);
+
+				const emitterModelMatrix = Cesium.Matrix4.fromTranslation(scratchOffset, matrix4Scratch);
+				const color = Cesium.Color.fromRandom(options.colorOptions[i % options.colorOptions.length]);
+				const force = forceFunction(options, i);
+
+				const item = viewer.scene.primitives.add(
+					new Cesium.ParticleSystem({
+						image: getImage(),
+						startColor: color,
+						endColor: color.withAlpha(0.0),
+						particleLife: 3.5,
+						speed: 0.00005,
+						imageSize: imageSize,
+						emissionRate: 30.0,
+						emitter: new Cesium.CircleEmitter(0.1),
+						lifetime: 0.1,
+						updateCallback: force,
+						modelMatrix: particlesModelMatrix,
+						emitterModelMatrix: emitterModelMatrix,
+					})
+				);
+				systemsArray.push(item);
+			}
+		}
+
+		const rocketSystems = [];
+		const cometSystems = [];
+		const rocketSystems2 = [];
+		createParticleSystems(rocketOptions, rocketSystems, particlesModelMatrix);
+		createParticleSystems(cometOptions, cometSystems , particlesModelMatrix2);
+		createParticleSystems(rocketOptions2, rocketSystems2, particlesModelMatrix3);
+
+    </script>
+    </div>
+</body>
+
+</html>

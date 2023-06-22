@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        p {
+            margin: 0 0 10px 0;
+        }
+        .content {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            margin: 8px;
+            padding: 0 10px;
+            width: 300px;
+            height: 300px;
+            background-color: antiquewhite;
+            border: 1px dashed cadetblue;
+        }
+        .content > div {
+            padding: 10px 0;
+        }
+        .content > div:not(:first-child) {
+            border-top: 1px dashed gray;
+            padding-top: 10px;
+        }
+        .none-display {
+            display: none;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+	<div class="content">
+        <div>
+            <button onclick="saveUserPosition()">현재 위치를 첫 화면으로 지정</button>
+            <button onclick="deleteUserPosition()">지정 삭제</button>
+        </div>
+        <div>
+            <p>전체 CCTV</p>
+            <button onclick="loadCone()">조명 On</button>
+            <button onclick="clearCone()">조명 Off</button>
+        </div>
+        <div class="seleceted-cctv" style="background-color: lightgray;">
+            <p>선택된 CCTV (없음)</p>
+            <div>
+                <button disabled>조명 On</button>
+                <button disabled>조명 Off</button>
+            </div>
+            <div>
+                <span>회전 10도</span>
+                <button disabled>시계방향</button>
+                <button disabled>반시계방향</button>
+            </div>
+        </div>
+        <div class="selected-cctv none-display">
+            <p>선택된 CCTV (있음)</p>
+            <div>
+                <button onclick="">조명 On</button>
+                <button onclick="">조명 Off</button>
+            </div>
+            <div>
+                <span>회전 10도</span>
+                <button>시계방향</button>
+                <button>반시계방향</button>
+            </div>
+        </div>
+	</div>
+    <script>
+        const MOVE_DISTANCE = 0.003 ;   // 3m
+        const CCTV_HEIGHT = 3.8;
+        const CCTV_DEFAULT_DEGREE = 30;
+        const CIRCLE_RADIUS = 2.0;
+        const CIRCLE_DENSITY = 0.020;
+        const FACTOR = 6371.0088;
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
+            url: "http://175.197.92.213:10502/ujterrain"
+        });
+        viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+            url: "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json"
+        }));
+
+        const model = {
+            assetId: 1626783,
+            dataList: [
+                {x: 129.12284412563184, y: 35.581043463265175, z: 117, h: 240, p: 0, r: 0},      // loc2
+                {x: 129.12259153647474, y: 35.581280864345864, z: 120, h: 80, p: 0, r: 0},     // loc2
+                {x: 129.12539796599455, y: 35.563481328103610, z: 100, h: 250, p: 0, r: 0},     // loc3
+                {x: 129.12534298575696, y: 35.563280803448414, z: 100, h: 200, p: 0, r: 0},     // loc3
+                {x: 129.12095649561198, y: 35.579496581713000, z: 125, h: 50, p: 0, r: 0},      // loc1 *
+                {x: 129.12109346000000, y: 35.579482756600000, z: 125, h: 150, p: 0, r: 0},     // loc1
+                {x: 129.12106932883862, y: 35.579386627897186, z: 125, h: 210, p: 0, r: 0},     // loc1 *
+                {x: 129.12094817237417, y: 35.579386224800210, z: 125, h: -30, p: 0, r: 0},     // loc1
+                {x: 129.12106819150750, y: 35.579583803822345, z: 125, h: 150, p: 0, r: 0},     // loc1
+                {x: 129.12107030202952, y: 35.579721659430610, z: 125, h: 150, p: 0, r: 0},     // loc1
+            ],
+        }
+
+        const _dataSourceCCTV = new Cesium.CustomDataSource("CCTV");
+        const _dataSourcePoint = new Cesium.CustomDataSource("point");
+        const _dataSourceCone = new Cesium.CustomDataSource("Cone");
+        const _dataSourceLOS = new Cesium.CustomDataSource("LOS");
+        const _dataSourceRED = new Cesium.CustomDataSource("RED");
+        viewer.dataSources.add(_dataSourceCCTV);
+        viewer.dataSources.add(_dataSourcePoint);
+        viewer.dataSources.add(_dataSourceCone);
+        viewer.dataSources.add(_dataSourceLOS);
+        viewer.dataSources.add(_dataSourceRED);
+
+        const loadModel = (assetId) => {
+            return Cesium.IonResource.fromAssetId(assetId);
+        }
+
+        const loadCCTV = async () => {
+            const resource = await loadModel(model.assetId);
+
+            for (let index = 0; index < model.dataList.length; index++) {
+                const data = model.dataList[index];
+                const position = Cesium.Cartesian3.fromDegrees(data.x, data.y);
+                const heading = Cesium.Math.toRadians(CCTV_DEFAULT_DEGREE+data.h);
+                const hpr = new Cesium.HeadingPitchRoll(heading, data.p, data.r);
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
+                addModelEntity(_dataSourceCCTV, resource, position, orientation);
+            };
+
+			// 높이 TEST 용
+            const cctvEntities = _dataSourceCCTV.entities.values;
+            for (let index = 0; index < cctvEntities.length; index++) {
+                const entity = cctvEntities[index];
+                const position = entity.position.getValue(viewer.clock.currentTime);
+                const newPosition = await newCartesianWithTerrain(position);
+                addPointEntity(_dataSourcePoint, newPosition, Cesium.Color.BLUE);
+            }
+        }
+
+        const loadCone = () => {
+            clearCone();
+            computeCircle((array) => {
+                const hierarchy = new Cesium.PolygonHierarchy(array);
+                addPolygonEntity(_dataSourceCone, hierarchy);
+            });
+        }
+
+        const loadLOS = () => {
+            //clearLOS();
+            computeCircle((array) => {
+                const [bottomPosition, topPosition] = array;
+                addLOSEntity(_dataSourceLOS, topPosition, bottomPosition)
+            });
+        }
+
+        const computeCircle = async (callback) => {
+            // TODO: 모델 리스트 for문 제거하도록 수정 필요
+            const cctvEntities = _dataSourceCCTV.entities.values;
+            for (let index = 0; index < cctvEntities.length; index++) {
+                const entity = cctvEntities[index];
+                
+                // CCTV 모델의 clampToGround 된 위치 구하기
+                const position = entity.position.getValue(viewer.clock.currentTime);
+                const clampToGroundPosition = await newCartesianWithTerrain(position);
+                const hpr = Cesium.HeadingPitchRoll.fromQuaternion(entity.orientation._value, new Cesium.HeadingPitchRoll(0,0,0));
+                const heading = Cesium.Math.toDegrees(hpr.heading);
+                const carto = viewer.scene.globe.ellipsoid.cartesianToCartographic(clampToGroundPosition);
+                const lon = Cesium.Math.toDegrees(carto.longitude);
+                const lat = Cesium.Math.toDegrees(carto.latitude);
+                const height = carto.height;
+                
+                // 조명의 위치
+                const topPosition = Cesium.Cartesian3.fromDegrees(lon, lat, height + CCTV_HEIGHT);
+                const getMovePoint = geoMove(lon, lat, height, heading - 80, MOVE_DISTANCE);
+                const center = await newCartesianWithTerrain(getMovePoint, 0, 0, 0);
+                const circlePositions = getCircleBoundries(center, CIRCLE_RADIUS, CIRCLE_DENSITY);
+                
+                addPointEntity(_dataSourceRED, center);
+
+                let positionArray = [];
+                for (let i = 0; i < circlePositions.length; i++) {
+                    let j = i + 1 < circlePositions.length ? i + 1 : 0;
+                    positionArray.push([circlePositions[i], topPosition, circlePositions[j]]);
+                }
+                
+                for (let k = 0; k < positionArray.length; k++) {
+                    callback(positionArray[k]);
+                }
+            }
+        }
+        
+        const addModelEntity = (datasource, resource, position, orientation) => {
+            datasource.entities.add({
+                model: {
+                    uri: resource,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                },
+                position: position,
+                orientation: orientation,
+            });
+        }
+
+        const addPointEntity = (datasource, position, color = Cesium.Color.RED) => {
+            datasource.entities.add({
+                point: {
+                    pixelSize: 5,
+                    color: color,
+                    outlineColor: Cesium.Color.WHITE,
+                    outlineWidth: 2,
+                },
+                position: position,
+            });
+        }
+
+        const addPolygonEntity = (datasource, hierarchy) => {
+            datasource.entities.add({
+                polygon: {
+                    hierarchy: hierarchy,
+                    perPositionHeight: true,
+                    outline: false,
+                    material: Cesium.Color.fromAlpha(Cesium.Color.YELLOW, parseFloat(0.2)),
+                }
+            });
+        }
+
+        const addLOSEntity = (datasource, top, bottom) => {
+            const difference = Cesium.Cartesian3.subtract(bottom, top, new Cesium.Cartesian3());
+            const direction = Cesium.Cartesian3.normalize(difference, new Cesium.Cartesian3());
+            const ray = new Cesium.Ray(top, direction);
+            const objectsToExclude = [
+                ..._dataSourceCCTV.entities.values,
+                ..._dataSourceCone.entities.values, 
+                ..._dataSourceLOS.entities.values, 
+            ];
+            const result = viewer.scene.pickFromRay(ray, objectsToExclude);
+
+            if (result && result?.position) {
+                const successMaterial = new Cesium.PolylineGlowMaterialProperty({
+                    color: Cesium.Color.GREEN,
+                    glowPower: 0.05,
+                });
+                const failMaterial = new Cesium.PolylineOutlineMaterialProperty({
+                    color: Cesium.Color.RED.withAlpha(0.5),
+                    outlineWidth: 0
+                });
+                addPolyLineEntity(datasource, top, result.position, successMaterial, 30);
+                addPolyLineEntity(datasource, result.position, bottom, failMaterial, 3);
+            }
+        }
+
+        const clearCone = () => {
+            _dataSourceRED.entities.removeAll();
+            _dataSourceCone.entities.removeAll();
+        }
+
+        const clearLOS = () => {
+            _dataSourceRED.entities.removeAll();
+            _dataSourceLOS.entities.removeAll();
+        }
+        
+        const newCartesianWithTerrain = async (position, a = 0, b = 0, c = 0) => {
+            const cartographicLocation = Cesium.Cartographic.fromCartesian(position);
+            return await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [cartographicLocation])
+                .then(function (updatedLocation) {
+                    // 높이 정보가 업데이트된 cartographicLocation을 Cartesian3 형태로 변환한다.
+                    const updatedCartesianLocation = Cesium.Cartesian3.fromRadians(
+                        updatedLocation[0].longitude,
+                        updatedLocation[0].latitude,
+                        updatedLocation[0].height
+                    );
+                    return updatedCartesianLocation;
+            });
+        }
+        const geoMove = (lon, lat, height, degree, distance) => {
+            const x = Cesium.Math.toRadians(lon);
+            const y = Cesium.Math.toRadians(lat);
+            const radian = Cesium.Math.toRadians(degree);
+            const length = distance / FACTOR;   // 단위: km
+
+            const moveY = Math.asin(Math.sin(y) * Math.cos(length) + Math.cos(y) * Math.sin(length) * Math.cos(radian));
+            const moveX = x + Math.atan2(Math.sin(radian) * Math.sin(length) * Math.cos(y), Math.cos(length) - Math.sin(y) * Math.sin(moveY));
+
+            const moveLon = Cesium.Math.toDegrees(moveX);
+            const moveLat = Cesium.Math.toDegrees(moveY);
+
+            return Cesium.Cartesian3.fromDegrees(moveLon, moveLat, height);
+        }
+
+        const getCircleBoundries = (center, radius, density = 0.009) => {
+            const ellipsePositions = Cesium.EllipseGeometryLibrary.computeEllipsePositions({
+                center: center,
+                semiMajorAxis: radius,
+                semiMinorAxis: radius,
+                rotation: 0,
+                granularity: density,
+            }, false, true);    //options, addFillPositions, addEdgePositions
+
+            if (!ellipsePositions || !ellipsePositions.outerPositions) {
+                return [];
+            }
+
+            const points = Cesium.Cartesian3.unpackArray(ellipsePositions.outerPositions);
+            points[points.length] = points[0];  // first point
+            return points;
+        }
+
+        const saveUserPosition = () => {
+            const position = {
+                x: viewer.camera.position.x,
+                y: viewer.camera.position.y,
+                z: viewer.camera.position.z,
+                h: viewer.camera.heading,
+                p: viewer.camera.pitch,
+                r: viewer.camera.roll 
+            }
+            window.localStorage.setItem("position", JSON.stringify(position));
+        }
+
+        const deleteUserPosition = () => {
+            window.localStorage.removeItem("position");
+        }
+
+        const getUserPosition = () => {
+            return JSON.parse(window.localStorage.getItem("position"));
+        }
+
+        const flyTo = () => {
+            const defaultPosition = {
+                x: -3280686.756404731,
+                y: 4045131.289152038,
+                z: 3692117.0218876083,
+                h: 0.8437411366659617,
+                p: -0.9150366950557816,
+                r: 0.0001398575659132817
+            }
+
+            const position = getUserPosition() || defaultPosition;
+            viewer.camera.flyTo({
+                destination : new Cesium.Cartesian3(position.x, position.y ,  position.z),
+                orientation: {heading: position.h, pitch: position.p, roll: position.r}
+            });
+        }
+        
+		flyTo();
+        loadCCTV();
+
+    </script>
+    </div>
+</body>
+
+</html>
