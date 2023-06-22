@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        .active {
+            background-color: tomato;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div>
+        <button class="button" onclick="changeTerrain(this, 'none');">Terrain - none</button>
+        <button class="button active" onclick="changeTerrain(this, 'ellisoid');">Terrain - Ellipsoid</button>
+        <button class="button" onclick="changeTerrain(this, 'sealevel');">Terrain - MeanSeaLevel</button>
+    </div>
+    <div id="cesiumContainer"></div>
+    <script>
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+
+        const viewer = new Cesium.Viewer('cesiumContainer');
+
+        const terrainProvider = {
+            none: null,
+            ellisoid: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_ellipsoid"
+            }),
+            sealevel: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_MSL"
+            })
+        }
+
+        const changeTerrain = (target, key) => {
+            viewer.terrainProvider = terrainProvider[key];
+
+            const buttonList = document.querySelectorAll(".button");
+            buttonList.forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            target.classList.add("active");
+        }
+
+        // terrain - Ellipsoid
+        viewer.terrainProvider = terrainProvider.ellisoid;
+        
+        // tileset
+        const tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+            url: "https://175.197.92.213:10210/ngii-buildings/3DTiles_20230614/jj/tileset.json",
+            customShader: new Cesium.CustomShader({
+                lightingModel: Cesium.LightingModel.UNLIT,
+            }),
+        }));
+        tileset.style = new Cesium.Cesium3DTileStyle({
+            color: {
+                evaluateColor : (feature) => {
+                    return  Cesium.Color.WHITE.withAlpha(0.7);
+                }
+            }
+        });
+        
+
+
+        const position = {
+			x: -3180233.6272010617,
+			y: 4290195.773390959,
+			z: 3476593.979662065,
+ 			h: 0.5397741516173662,
+			p: -0.25389695452449756,
+			r: 6.283132068815111
+		}
+
+        viewer.camera.flyTo({
+            destination : new Cesium.Cartesian3(position.x || 0, position.y || 0,  position.z || 0),
+            orientation: {heading: position.h || 0, pitch: position.p || 0, roll: position.r || 0}
+        });
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    </script>
+    </div>
+</body>
+
+</html>

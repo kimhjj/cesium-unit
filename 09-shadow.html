@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        // Your access token can be found at: https://ion.cesium.com/tokens.
+        // Replace `your_access_token` with your Cesium ion access token.
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        const viewer = new Cesium.Viewer("cesiumContainer", {
+            shadows: true,
+        });
+        
+        const shadowMap = viewer.shadowMap;
+        shadowMap.maximumDistance = 10000.0;
+        //shadowMap.softShadows = true;
+
+        const load = async () => {
+            const resource = await Cesium.IonResource.fromAssetId(1656019);
+            const entity = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(127, 35, 50),
+                model: {
+                    uri: resource,
+                },
+            });
+            viewer.flyTo(entity)
+        };
+        
+        load();
+
+    </script>
+    </div>
+</body>
+
+</html>

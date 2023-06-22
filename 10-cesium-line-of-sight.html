@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        // Your access token can be found at: https://ion.cesium.com/tokens.
+        // Replace `your_access_token` with your Cesium ion access token.
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain()
+        });
+
+        const dataSource = new Cesium.CustomDataSource('myData');
+        const entity = dataSource.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(127, 35, 20),
+            billboard: {
+                image: 'image.png'
+            }
+        });
+
+        viewer.dataSources.add(dataSource);
+
+
+        var drawSightViewLine = function (dataSource, positionData) {
+        var direction = Cesium.Cartesian3.normalize(Cesium.Cartesian3.subtract(positionData[1], positionData[0], new Cesium.Cartesian3()), new Cesium.Cartesian3());
+        var ray = new Cesium.Ray(positionData[0], direction);
+        var objectsToExclude = [];
+        var result = viewer.scene.pickFromRay(ray, dataSource.entities.values);
+        if (result !== undefined) {
+            dataSource.entities.add({
+                polyline: {
+                    positions: [positionData[0], result.position],
+                    arcType: Cesium.ArcType.NONE,
+                    width: 30.0,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        color: Cesium.Color.DEEPSKYBLUE,
+                        glowPower: 0.05,
+                    }),
+                    depthFailMaterial: new Cesium.PolylineGlowMaterialProperty({
+                        color: Cesium.Color.DEEPSKYBLUE,
+                        glowPower: 0.05,
+                    }),
+
+                }
+            });
+            dataSource.entities.add({
+                polyline: {
+                    positions: [result.position, positionData[1]],
+                    arcType: Cesium.ArcType.NONE,
+                    width: 3,
+                    material: new Cesium.PolylineOutlineMaterialProperty({
+                        color: Cesium.Color.RED,
+                        outlineWidth: 0
+                    }),
+                    depthFailMaterial: new Cesium.PolylineOutlineMaterialProperty({
+                        color: Cesium.Color.RED.withAlpha(0.5),
+                        outlineWidth: 0
+                    })
+
+                }
+            });
+        } else {
+            dataSource.entities.add({
+                polyline: {
+                    positions: positionData,
+                    arcType: Cesium.ArcType.NONE,
+                    width: 30.0,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        color: Cesium.Color.DEEPSKYBLUE,
+                        glowPower: 0.05,
+                    }),
+                    depthFailMaterial: new Cesium.PolylineGlowMaterialProperty({
+                        color: Cesium.Color.DEEPSKYBLUE,
+                        glowPower: 0.05,
+                    }),
+
+                }
+            });
+        }
+        drawSightViewLine(dataSource);
+    };
+
+    </script>
+    </div>
+</body>
+
+</html>

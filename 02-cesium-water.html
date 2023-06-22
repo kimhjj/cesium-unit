@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<!-- Include the CesiumJS JavaScript and CSS files -->
+	<script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+	<link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+	<div id="cesiumContainer"></div>
+	<script>
+
+		Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+		const viewer = new Cesium.Viewer("cesiumContainer");
+		const scene = viewer.scene;
+
+		const primitive = new Cesium.Primitive({
+			geometryInstances: new Cesium.GeometryInstance({
+				geometry: new Cesium.RectangleGeometry({
+					rectangle: Cesium.Rectangle.fromDegrees(
+						-180.0,
+						-90.0,
+						180.0,
+						90.0
+					),
+					// Set the dimensions of the water
+					vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
+				}),
+			}),
+			appearance: new Cesium.EllipsoidSurfaceAppearance({
+				aboveGround: true,
+			}),
+			show: true,
+		})
+		scene.primitives.add(primitive);
+
+		primitive.appearance.material = new Cesium.Material({
+			fabric: {
+				type: "Water",
+				uniforms: {
+					// Set the specular map to use a blurry reflection
+					specularMap: "../earthspec1k.jpg",
+					// Set the normal map to use a wavy pattern
+					normalMap: Cesium.buildModuleUrl(
+						"https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Assets/Textures/waterNormals.jpg"
+					),
+					frequency: 10000.0,
+					animationSpeed: 0.1,
+					amplitude: 1.0,
+				},
+			},
+		});
+		viewer.zoomTo(primitive);
+
+	</script>
+	</div>
+</body>
+
+</html>

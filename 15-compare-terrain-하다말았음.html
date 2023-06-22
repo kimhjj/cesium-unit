@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        .active {
+            background-color: tomato;
+        }
+
+		#slider {
+			position: absolute;
+			left: 50%;
+			top: 30px;
+			background-color: #d3d3d3;
+			width: 5px;
+			height: calc(100% - 30px);
+			z-index: 9999;
+		}
+
+		#slider:hover {
+			cursor: ew-resize;
+		}
+    </style>
+</head>
+
+<body>
+    <div>
+        <button class="button" onclick="changeTerrain(this, 'none');">Terrain - none</button>
+        <button class="button active" onclick="changeTerrain(this, 'ellisoid');">Terrain - Ellipsoid</button>
+        <button class="button" onclick="changeTerrain(this, 'sealevel');">Terrain - MeanSeaLevel</button>
+    </div>
+	<div id="slider" style="visibility: 'visible'"></div>
+    <div id="cesiumContainer"></div>
+    <script>
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		let moveActive;
+		
+		const OnHandle_MoveStart = () => {
+			moveActive = true;
+		}
+		const OnHandle_MoveEnd = () => {
+			moveActive = false;
+		}
+		const OnHandle_Move = (movement) => {
+			if (!moveActive) {
+				return;
+			}
+
+			const relativeOffset = movement.endPosition.x;
+			const splitPosition = (slider.offsetLeft + relativeOffset) / slider.parentElement.offsetWidth;
+			slider.style.left = `${100.0 * splitPosition}%`;
+			viewer.scene.splitPosition = splitPosition;
+		}
+		
+		const slider = document.getElementById("slider");
+		const handler = new Cesium.ScreenSpaceEventHandler(slider);
+        handler.setInputAction(OnHandle_MoveStart, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        handler.setInputAction(OnHandle_MoveStart, Cesium.ScreenSpaceEventType.PINCH_START);
+        handler.setInputAction(OnHandle_Move, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        handler.setInputAction(OnHandle_Move, Cesium.ScreenSpaceEventType.PINCH_MOVE);
+        handler.setInputAction(OnHandle_MoveEnd, Cesium.ScreenSpaceEventType.LEFT_UP);
+        handler.setInputAction(OnHandle_MoveEnd, Cesium.ScreenSpaceEventType.PINCH_END);
+       
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        const terrainProvider = {
+            none: null,
+            ellisoid: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_ellipsoid"
+            }),
+            sealevel: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_MSL"
+            })
+        }
+
+        const changeTerrain = (target, key) => {
+            viewer.terrainProvider = terrainProvider[key];
+
+            const buttonList = document.querySelectorAll(".button");
+            buttonList.forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            target.classList.add("active");
+        }
+
+        // terrain - Ellipsoid
+        viewer.terrainProvider = terrainProvider.ellisoid;
+        
+        // tileset
+        viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+            url: "https://175.197.92.213:10210/ngii-buildings/3DTiles_20230613/tileset.json",
+        }));
+		
+		// load tilesets
+        try {
+            const left = new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_ellipsoid"
+            })
+            viewer.terrainProvider = left;
+            left.splitDirection = Cesium.SplitDirection.LEFT;
+
+            const right = null;
+            viewer.terrainProvider = right;
+            right.splitDirection = Cesium.SplitDirection.RIGHT;
+			
+        } catch (error) {
+            console.log(`Error loading tileset: ${error}`);
+        }
+
+        const position = {
+			x: -3180233.6272010617,
+			y: 4290195.773390959,
+			z: 3476593.979662065,
+ 			h: 0.5397741516173662,
+			p: -0.25389695452449756,
+			r: 6.283132068815111
+		}
+
+        viewer.camera.flyTo({
+            destination : new Cesium.Cartesian3(position.x || 0, position.y || 0,  position.z || 0),
+            orientation: {heading: position.h || 0, pitch: position.p || 0, roll: position.r || 0}
+        });
+
+    </script>
+    </div>
+</body>
+
+</html>

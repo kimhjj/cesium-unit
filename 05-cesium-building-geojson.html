@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        const viewer = new Cesium.Viewer('cesiumContainer');
+
+        // geojson
+        const geojsonURL = "http://192.168.10.100:48081/geoserver/gaia3d/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gaia3d:gangnam_building_4326_3&outputFormat=application/json";
+        
+        Cesium.GeoJsonDataSource.load(geojsonURL, {
+            stroke: new Cesium.Color(0, 0, 0, 0),
+            fill: Cesium.Color.RED
+
+        }).then((dataSource) => {
+            const entities = dataSource.entities.values;
+            for (let i = 0; i < entities.length; i++) {
+                let entity = entities[i];
+                entity.polygon.extrudedHeight = entity.properties?.bldh_bv?.getValue() || 0;
+            }
+            viewer.dataSources.add(dataSource);
+        });
+        
+        // 건수: 35,028건
+
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(127.058997, 37.511666, 8000),
+        });
+
+
+        //entity.polygon.material = Cesium.Color.DARKGREY;
+        //entity.polygon.outlineColor = Cesium.Color.TRANSPARENT;
+    </script>
+    </div>
+</body>
+
+</html>
+
+

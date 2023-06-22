@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        .content {
+            position: absolute;
+            top: 0px;
+            width: calc(100% - 40px);
+            height: 120px;
+            padding: 20px;
+        }
+        .button {
+            margin: 2px 2px 2px 0;
+        }
+        .active.terrain {
+            background-color: tomato;
+        }
+        .active.move {
+            background-color: cadetblue;
+        }
+
+        #cesiumContainer {
+            position: absolute;
+            top: 120px;
+            width: 100%;
+            height: calc(100% - 120px);
+        }
+
+		#slider {
+			position: absolute;
+			left: 50%;
+			top: 120px;
+			background-color: #d3d3d3;
+			width: 5px;
+			height: calc(100% - 120px);
+			z-index: 9999;
+		}
+
+		#slider:hover {
+			cursor: col-resize;
+		}
+
+        #slider-info {
+            position: absolute;
+            left: 50%;
+            margin-left: -5px;
+            background-color: yellow;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="content">
+        <div>
+            <button class="button terrain" onclick="changeTerrain(this, 'none');">Terrain - none</button>
+            <button class="button terrain active" onclick="changeTerrain(this, 'ellisoid');">Terrain - Ellipsoid</button>
+            <button class="button terrain" onclick="changeTerrain(this, 'sealevel');">Terrain - MeanSeaLevel</button>
+        </div>
+        <div>
+            <button class="button move" onclick="moveTo(this, 'su');">서울</button>
+            <button class="button move active" onclick="moveTo(this, 'jj');">제주</button>
+        </div>
+        <div style="position: absolute; top: 10px; right: 10px; background-color: antiquewhite;">
+            <세슘 globe 안 나오면> https://175.197.92.213:10210/ngii-buildings/3DTiles_20230613/jj/tileset.json 접속 후 
+            <br/>
+            "고급->안전하지않음으로 이동" 클릭 후 http://175.197.92.213:10506/ 재접속 
+        </div>
+        <div id="slider-info">▼ slider</div>
+        <div style="margin-top: 10px;">
+            <span style="float:left">왼쪽-빨강-이동훈 수석님 (FME) (6/16 제주 변경됨 - 4326 변환)</span>
+            <span style="float:right">오른쪽-파랑-Mouna 주임님 (FME+세슘Tiler) (6/15 제주 변경됨)</span>
+        </div>
+    </div>
+    <div id="slider" style="visibility: 'visible'"></div>
+    <div id="cesiumContainer"></div>
+    <script>
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		let moveActive = false;
+		
+		const moveStart = () => {
+			moveActive = true;
+		}
+		const moveEnd = () => {
+			moveActive = false;
+		}
+		const move = (movement) => {
+			if (!moveActive) return;
+
+			const relativeOffset = movement.endPosition.x;
+			const splitPosition = (slider.offsetLeft + relativeOffset) / slider.parentElement.offsetWidth;
+			slider.style.left = `${100.0 * splitPosition}%`;
+			sliderInfo.style.left = `${100.0 * splitPosition}%`;
+			viewer.scene.splitPosition = splitPosition;
+		}
+		
+		const slider = document.getElementById("slider");
+		const sliderInfo = document.getElementById("slider-info");
+		const handler = new Cesium.ScreenSpaceEventHandler(slider);
+        handler.setInputAction(moveStart, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+        handler.setInputAction(moveStart, Cesium.ScreenSpaceEventType.PINCH_START);
+        handler.setInputAction(move, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        handler.setInputAction(move, Cesium.ScreenSpaceEventType.PINCH_MOVE);
+        handler.setInputAction(moveEnd, Cesium.ScreenSpaceEventType.LEFT_UP);
+        handler.setInputAction(moveEnd, Cesium.ScreenSpaceEventType.PINCH_END);
+        
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        const terrainProvider = {
+            none: null,
+            ellisoid: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_ellipsoid"
+            }),
+            sealevel: new Cesium.CesiumTerrainProvider({
+                url: "https://175.197.92.213:10210/terrain-tile/dem05_MSL"
+            })
+        }
+
+        const changeTerrain = (target, key) => {
+            viewer.terrainProvider = terrainProvider[key];
+
+            const buttonList = document.querySelectorAll(".button.terrain");
+            buttonList.forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            target.classList.add("active");
+        }
+
+        const tilesetList = [
+            {
+                desc: '이동훈 수석님 제주', 
+                //url:`https://175.197.92.213:10210/ngii-buildings/3DTiles_20230613/jj/tileset.json`, 
+                url: `https://175.197.92.213:10210/ngii-buildings/3DTiles_20230616/jj2/tileset.json`,
+                color: 'color("red", 0.5)', 
+                direction: Cesium.SplitDirection.LEFT
+            },
+            {
+                desc: '이동훈 수석님 서울', 
+                url: `https://175.197.92.213:10210/ngii-buildings/3DTiles_20230613/su/tileset.json`, 
+                color: 'color("red", 0.5)', 
+                direction: Cesium.SplitDirection.LEFT
+            },
+            {
+                desc: 'Mouna 주임님 제주', 
+                url: `https://175.197.92.213:10210/ngii-buildings/3DTiles_20230615/jj/tileset.json`, 
+                color: 'color("blue", 0.5)', 
+                direction: Cesium.SplitDirection.RIGHT
+            },
+            {
+                desc: 'Mouna 주임님 서울', 
+                url: `https://175.197.92.213:10210/ngii-buildings/3DTiles_20230614/su/tileset.json`, 
+                color: 'color("blue", 0.5)',
+                direction: Cesium.SplitDirection.RIGHT
+            }
+        ]
+
+        const loadTileset = () => {
+            tilesetList.forEach((tileset) => {
+                const t = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+                    url: tileset.url,
+                    customShader: new Cesium.CustomShader({
+                        lightingModel: Cesium.LightingModel.UNLIT,
+                    }),
+                    splitDirection: tileset.direction
+                }))
+                t.style = new Cesium.Cesium3DTileStyle({
+                    color: tileset.color
+                });
+                t.allTilesLoaded.addEventListener(() => {
+                    console.log('All tiles are loaded');
+                });
+            })
+        }
+
+        const moveTo = (target, key) => {
+            flyTo(key);
+
+            const buttonList = document.querySelectorAll(".button.move");
+            buttonList.forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            target.classList.add("active");
+        }
+        
+        const flyTo = (target) => {
+            const positionList = {
+                'su': {            
+                    x: -3066936.973692118,
+                    y: 4069001.145874516,
+                    z: 3864360.849764339,
+                    h: 6.1872568754645725,
+                    p: -0.9660106574303313,
+                    r: 6.283096243383119
+                },
+                'jj': {  
+                    x: -3180721.249671625,
+                    y: 4290493.985480841,
+                    z: 3475779.781497198,
+                    h: 0.5397742065943509,
+                    p: -0.25389730814082245,
+                    r: 6.283131849938558
+                }
+            }
+            
+            const position = positionList[target];
+            viewer.camera.flyTo({
+                destination : new Cesium.Cartesian3(position.x, position.y,  position.z),
+                orientation: {heading: position.h, pitch: position.p, roll: position.r}
+            });
+        }
+
+        // load
+        viewer.terrainProvider = terrainProvider.ellisoid;
+        viewer.scene.splitPosition = slider.offsetLeft / slider.parentElement.offsetWidth;
+        loadTileset();
+        flyTo('jj');
+
+    </script>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: new Cesium.CesiumTerrainProvider({
+                url: "http://175.197.92.213:10502/ujterrain"
+            })
+        });
+
+        // tileset
+        const tilesetURL = "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json";
+        const tileset = new Cesium.Cesium3DTileset({
+            url: tilesetURL
+        });
+
+        const tilesetLayer = viewer.scene.primitives.add(tileset);
+        tilesetLayer.style = new Cesium.Cesium3DTileStyle({
+            color: {
+                evaluateColor: (feature, result) => {
+                    return Cesium.Color.RED;
+                }
+            }
+        });
+        
+        // 건수: 79,253건
+
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(129.242039, 35.576655, 8000),
+        });
+
+    </script>
+    </div>
+</body>
+
+</html>
