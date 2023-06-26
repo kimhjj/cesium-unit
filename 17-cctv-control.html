@@ -82,14 +82,13 @@
             </div>
             <div>
                 <span>회전 <input type="text" id="moveDegree" value="10" size="1" maxlength="3" oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" />도</span>
-                <button onclick="rotate()">시계방향</button>
-                <button onclick="rotate()">반시계방향</button>
+                <button onclick="rotate(1)">시계방향</button>
+                <button onclick="rotate(-1)">반시계방향</button>
             </div>
         </div>
         <div style="font-size: 14px;">
             <p>[TODO] 수정 필요 버그들</p>
             <ul>
-                <li>CCTV GLTF 객체가 하늘에 떠있음 (?)</li>
                 <li>CCTV 회전을 할 때 빨간색 선이 보임 -> 초기화가 안되는 것. 조명off 누르고 조명on 하면 동작함</li>
             </ul>
         </div>
@@ -116,7 +115,7 @@
             url: "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json"
         }));
         viewer.scene.globe.depthTestAgainstTerrain = true;
-
+        
         const model = {
             assetId: 1626783,
             dataList: [
@@ -186,20 +185,17 @@
             // CCTV 위치를 확인하고, GLFT 모델을 올리는 부분
             for (let index = 0; index < model.dataList.length; index++) {
                 const data = model.dataList[index];
-                const position = Cesium.Cartesian3.fromDegrees(data.x, data.y, data.z);
+                const position = Cesium.Cartesian3.fromDegrees(data.x, data.y);
+                const positionWithTerrain = await newCartesianWithTerrain(position);
                 const heading = Cesium.Math.toRadians(CCTV_DEFAULT_DEGREE+data.h);
                 const hpr = new Cesium.HeadingPitchRoll(heading, data.p, data.r);
-                const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
-                addModelEntity(_dataSourceCCTV, resource, position, orientation);
-            };
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(positionWithTerrain, hpr);
 
-			// 높이 TEST 용 - 파란색 점
-            const cctvEntities = _dataSourceCCTV.entities.values;
-            for (let index = 0; index < cctvEntities.length; index++) {
-                const entity = cctvEntities[index];
-                const position = entity.position.getValue(viewer.clock.currentTime);
-                const newPosition = await newCartesianWithTerrain(position);
-                addPointEntity(_dataSourcePoint, newPosition, Cesium.Color.BLUE);
+                // CCTV 모델
+                addModelEntity(_dataSourceCCTV, resource, positionWithTerrain, orientation);
+
+			    // 높이 TEST 용 - 파란색 점
+                addPointEntity(_dataSourcePoint, positionWithTerrain, Cesium.Color.BLUE);
             }
         }
 
@@ -266,7 +262,7 @@
             datasource.entities.add({
                 model: {
                     uri: resource,
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                    //heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
                 position: position,
                 orientation: orientation,
@@ -315,8 +311,8 @@
             const direction = Cesium.Cartesian3.normalize(difference, new Cesium.Cartesian3());
             const ray = new Cesium.Ray(top, direction);
             const objectsToExclude = [
-                // ..._dataSourceCCTV.entities.values,
-                // ..._dataSourceCone.entities.values, 
+                ..._dataSourceCCTV.entities.values,
+                ..._dataSourceCone.entities.values, 
                 ..._dataSourceLOS.entities.values, 
             ];
             const result = viewer.scene.pickFromRay(ray, objectsToExclude);
@@ -392,7 +388,7 @@
             return points;
         }
 
-        const rotate = () => {
+        const rotate = (sign) => {
             const moveDegree = Number(document.getElementById("moveDegree").value) || 0;
             document.getElementById("moveDegreeHidden").value = moveDegree;
 
@@ -401,7 +397,7 @@
 
             const originHPR = Cesium.HeadingPitchRoll.fromQuaternion(originOrientation, new Cesium.HeadingPitchRoll(0,0,0));
             const originHeading = Cesium.Math.toDegrees(originHPR.heading);
-            const newHeading = Cesium.Math.toRadians(moveDegree*(-1)); // 변경할 heading 값 (라디안으로 변환)
+            const newHeading = Cesium.Math.toRadians(moveDegree*sign*(-1)); // 변경할 heading 값 (라디안으로 변환)
 
             const axis = new Cesium.Cartesian3(0, 0, 1); // 회전 축 (Z축 기준으로 회전)
             const rotationQuaternion = Cesium.Quaternion.fromAxisAngle(axis, newHeading); // 회전 Quaternion 생성
@@ -481,7 +477,7 @@
             });
         }
         
-		flyTo(getUserPosition());
+        flyTo(getUserPosition());
         loadCCTV();
 
     </script>
