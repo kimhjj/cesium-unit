@@ -22,7 +22,7 @@
             margin: 8px;
             padding: 0 10px;
             width: 300px;
-            height: 300px;
+            height: 400px;
             background-color: antiquewhite;
             border: 1px dashed cadetblue;
         }
@@ -63,32 +63,39 @@
             <button onclick="clearCone()">조명 Off</button>
         </div>
         <div id="not-selected-cctv" style="background-color: lightgray;">
-            <p>선택된 CCTV (없음)</p>
+            <p>CCTV 객체를 선택해주세요.</p>
             <div>
                 <button disabled>조명 On</button>
                 <button disabled>조명 Off</button>
             </div>
             <div>
-                <span>회전 10도</span>
+                <span>회전 <input disabled id="moveDegreeHidden" type="text" value="10" size="1" />도</span>
                 <button disabled>시계방향</button>
                 <button disabled>반시계방향</button>
             </div>
         </div>
         <div id="selected-cctv" style="display: none;">
-            <p>선택된 CCTV (있음)</p>
+            <p>선택된 CCTV 제어</p>
             <div>
                 <button onclick="loadLOS()">조명 On</button>
                 <button onclick="clearLOS()">조명 Off</button>
             </div>
             <div>
-                <span>회전 10도</span>
-                <button onclick="rotate(10)">시계방향</button>
-                <button onclick="rotate(-10)">반시계방향</button>
+                <span>회전 <input type="text" id="moveDegree" value="10" size="1" maxlength="3" oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" />도</span>
+                <button onclick="rotate()">시계방향</button>
+                <button onclick="rotate()">반시계방향</button>
             </div>
+        </div>
+        <div style="font-size: 14px;">
+            <p>[TODO] 수정 필요 버그들</p>
+            <ul>
+                <li>CCTV GLTF 객체가 하늘에 떠있음 (?)</li>
+                <li>CCTV 회전을 할 때 빨간색 선이 보임 -> 초기화가 안되는 것. 조명off 누르고 조명on 하면 동작함</li>
+            </ul>
         </div>
 	</div>
     <script>
-        const LENS_DISTANCE = 0.00037 ;   // 20cm
+        const LENS_DISTANCE = 0.00036 ;   // 20cm
         const MOVE_DISTANCE = 0.003 ;   // 3m
         const CCTV_HEIGHT = 3.6;
         const CCTV_DEFAULT_DEGREE = 30;
@@ -310,7 +317,7 @@
             const objectsToExclude = [
                 // ..._dataSourceCCTV.entities.values,
                 // ..._dataSourceCone.entities.values, 
-                // ..._dataSourceLOS.entities.values, 
+                ..._dataSourceLOS.entities.values, 
             ];
             const result = viewer.scene.pickFromRay(ray, objectsToExclude);
 
@@ -385,9 +392,12 @@
             return points;
         }
 
-        const rotate = (moveDegree) => {
-            const originPosition = selectedCCTV.position.getValue(viewer.clock.currentTime);
-            const originOrientation = selectedCCTV.orientation.getValue(viewer.clock.currentTime);  // Quaternion
+        const rotate = () => {
+            const moveDegree = Number(document.getElementById("moveDegree").value) || 0;
+            document.getElementById("moveDegreeHidden").value = moveDegree;
+
+            const originPosition = selectedCCTV.position.getValue();
+            const originOrientation = selectedCCTV.orientation.getValue();  // Quaternion
 
             const originHPR = Cesium.HeadingPitchRoll.fromQuaternion(originOrientation, new Cesium.HeadingPitchRoll(0,0,0));
             const originHeading = Cesium.Math.toDegrees(originHPR.heading);
