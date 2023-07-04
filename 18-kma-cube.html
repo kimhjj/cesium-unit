@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        .content {
+            position: absolute;
+            top: 0px;
+            width: calc(100% - 40px);
+            height: 120px;
+            padding: 20px;
+        }
+        .button {
+            margin: 2px 2px 2px 0;
+        }
+        .active.terrain {
+            background-color: tomato;
+        }
+        .active.move {
+            background-color: cadetblue;
+        }
+
+        #cesiumContainer {
+            position: absolute;
+            top: 120px;
+            width: 100%;
+            height: calc(100% - 120px);
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="content">
+		<div>12km</div>
+    </div>
+    <div id="cesiumContainer"></div>
+    <script>
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+			
+		// 1. 큐브를 그린다. 원점에서 12km 간격 이동
+		//		원점은 목포쪽이다. x값이 증가하고, 증가가 끝나면 y값이 증가한다.
+		// 2. 먼저 큐브를 그려보자. 높이는 5000~5400 - 4300~4500 으로 설정한다.
+
+		const drawCube = () => {
+			const [startX, startY] = [101.577323, 12.217029];
+			const [maxX, maxY] = [491, 100]; //419];
+			const distance = 12000;
+			const position = Cesium.Cartesian3.fromDegrees(startX, startY, 5000.0);
+			
+			for(let y = 0; y < maxY; y++) {
+				let calcY = addY(position, distance*y);
+				ds
+				for(let x = 0; x < maxX; x++) {
+					let calcX = addX(position, distance*x);
+					
+					viewer.entities.add({
+						position: Cesium.Cartesian3.fromDegrees(calcX.lon, calcY.lat, 5000),
+						box: {
+							dimensions: new Cesium.Cartesian3(distance, distance, 300),
+							material: Cesium.Color.RED.withAlpha(0.5),
+							outline: true,
+							outlineColor: Cesium.Color.BLACK,
+						},
+					});
+				}
+			}
+		}
+		
+		const addY = (position, distance) => {
+			let northVector = new Cesium.Cartesian3(0, 0, distance);
+			let newPosition = Cesium.Cartesian3.add(position, northVector, new Cesium.Cartesian3());
+			
+			let newCartographic = Cesium.Cartographic.fromCartesian(newPosition);
+			let newLongitude = Cesium.Math.toDegrees(newCartographic.longitude);
+			let newLatitude = Cesium.Math.toDegrees(newCartographic.latitude);
+			let newHeight = newCartographic.height;
+			
+			return {lon: newLongitude, lat: newLatitude};
+		}
+
+		const addX = (position, distance) => {
+			let eastVector = new Cesium.Cartesian3(distance * (-1), 0, 0);
+			let newPosition = Cesium.Cartesian3.add(position, eastVector, new Cesium.Cartesian3());
+			
+			let newCartographic = Cesium.Cartographic.fromCartesian(newPosition);
+			let newLongitude = Cesium.Math.toDegrees(newCartographic.longitude);
+			let newLatitude = Cesium.Math.toDegrees(newCartographic.latitude);
+			let newHeight = newCartographic.height;
+			
+			return {lon: newLongitude, lat: newLatitude};
+		}
+		
+        const flyTo = (target) => {
+            const positionList = {
+                'ko': { 
+                    x: -3692960.9010914317,
+                    y: 5521059.97524565,
+                    z: 3916491.0511800093,
+                    h: 0.2650252972560132,
+                    p: -1.143294535614582,
+                    r: 0.00023341358505302168
+                },
+                'g120': { 
+                    x: -4297592.334571193, 
+					y: 11726991.900281686, 
+					z: 1239175.8912950524,
+                    h: 0.12748782524444469,
+                    p: -1.1839935226361527,
+                    r: 0.001979041395128611
+                }
+            }
+            
+            const position = positionList[target];
+            viewer.camera.flyTo({
+                destination : new Cesium.Cartesian3(position.x, position.y,  position.z),
+                orientation: {heading: position.h, pitch: position.p, roll: position.r}
+            });
+        }
+
+        // load
+        flyTo('g120');
+		drawCube();
+
+    </script>
+    </div>
+</body>
+
+</html>
