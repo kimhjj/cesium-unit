@@ -98,8 +98,10 @@
 			const distance = 12000;
 			const position = Cesium.Cartesian3.fromDegrees(startX, startY);
 			
-			const hpaList = [500,600,700];
-			hpaList.forEach((hpa) => {
+			const hpaList = [700, 600, 500];
+			// [1000, 975, 950, 925, 900, 875, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 70, 50]
+			
+			hpaList.reduce((prevHpa, hpa) => {
 			
 				for(let y = minY; y < maxY; y++) {
 					let calcY = addY(position, distance*y);
@@ -111,7 +113,7 @@
 						
 						const tmp = Number(dataGrid[hpa]["tmp"][currentCell]);
 						const upperHeight = Number(dataGrid[hpa]["hgt"][currentCell]);
-						const underHeight = Number(dataGrid[hpa+100]["hgt"][currentCell]);
+						const underHeight = Number(dataGrid[prevHpa]["hgt"][currentCell]);
 						const diffHeight = upperHeight - underHeight;
 						
 						viewer.entities.add({
@@ -123,7 +125,9 @@
 						});
 					}
 				}
-			})
+				
+				return hpa;
+			}, hpaList[0])
 		}
 		
 		const addY = (position, distance) => {
