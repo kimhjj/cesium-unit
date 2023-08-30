@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        p {
+            margin: 0 0 10px 0;
+        }
+        .content {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            margin: 8px;
+            padding: 0 10px;
+            width: 300px;
+            height: 480px;
+            background-color: antiquewhite;
+            border: 1px dashed cadetblue;
+        }
+        .content > div {
+            padding: 10px 0;
+        }
+        .content > div:not(:first-child) {
+            border-top: 1px dashed gray;
+            padding-top: 10px;
+        }
+        .none-display {
+            display: none;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+	<div class="content">
+        <div>
+            <button onclick="moveTo('loc1')">위치1</button>
+            <button onclick="moveTo('loc2')">위치2</button>
+            <button onclick="moveTo('loc3')">위치3</button>
+        </div>
+        <div>
+            <button onclick="saveUserPosition()">현재 위치를 첫 화면으로 지정</button>
+            <button onclick="deleteUserPosition()">위치 초기화</button>
+        </div>
+        <div>
+            <p>전체 CCTV</p>
+            <button onclick="loadCone()">조명 On</button>
+            <button onclick="clearCone()">조명 Off</button>
+        </div>
+        <div id="not-selected-cctv" style="background-color: lightgray;">
+            <p>CCTV 객체를 선택해주세요.</p>
+            <div>
+                <button disabled>조명 On</button>
+                <button disabled>조명 Off</button>
+            </div>
+            <div>
+                <span>회전 <input disabled id="moveDegreeHidden" type="text" value="10" size="1" />도</span>
+                <button disabled>시계방향</button>
+                <button disabled>반시계방향</button>
+            </div>
+        </div>
+        <div id="selected-cctv" style="display: none;">
+            <p>선택된 CCTV 제어</p>
+            <div>
+                <button onclick="loadLOS()">조명 On</button>
+                <button onclick="clearLOS()">조명 Off</button>
+            </div>
+            <div>
+                <span>회전 <input type="text" id="moveDegree" value="10" size="1" maxlength="3" oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');" />도</span>
+                <button onclick="rotate(1)">시계방향</button>
+                <button onclick="rotate(-1)">반시계방향</button>
+            </div>
+        </div>
+        <div style="font-size: 14px;">
+            <p>[TODO] 할일</p>
+            <ul>
+                <li>콘을 DB로?</li>
+                <li>전방향 조명 추가</li>
+                <li>차폐 영역 부피 계산 가능한지</li>
+            </ul>
+        </div>
+        <div style="font-size: 14px;">
+            <p>[TODO] 수정 필요 버그들</p>
+            <ul>
+                <li></li>
+            </ul>
+        </div>
+	</div>
+    <script>
+        const LENS_DISTANCE = 0.00036 ;   // 20cm
+        const MOVE_DISTANCE = 0.003 ;   // 3m
+        const CCTV_HEIGHT = 3.6;
+        const CCTV_DEFAULT_DEGREE = 30;
+        const CIRCLE_RADIUS = 2.0;
+        const CIRCLE_DENSITY = 0.02;
+        const FACTOR = 6371.0088;
+
+        let selectedCCTV = null;
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
+            url: "http://175.197.92.213:10502/ujterrain"
+        });
+        viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+            url: "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json"
+        }));
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+        
+        const model = {
+            assetId: 1626783,
+            dataList: [
+                {x: 129.12284412563184, y: 35.581043463265175, z: 117, h: 240, p: 0, r: 0},      // loc2
+                // {x: 129.12259153647474, y: 35.581280864345864, z: 120, h: 80, p: 0, r: 0},     // loc2
+                // {x: 129.12539796599455, y: 35.563481328103610, z: 100, h: 250, p: 0, r: 0},     // loc3
+                // {x: 129.12534298575696, y: 35.563280803448414, z: 100, h: 40, p: 0, r: 0},     // loc3
+                // {x: 129.12095649561198, y: 35.579496581713000, z: 125, h: 70, p: 0, r: 0},      // loc1 *
+                // {x: 129.12109346000000, y: 35.579482756600000, z: 125, h: 150, p: 0, r: 0},     // loc1
+                // {x: 129.12106932883862, y: 35.579386627897186, z: 125, h: 210, p: 0, r: 0},     // loc1 *
+                // {x: 129.12094817237417, y: 35.579386224800210, z: 125, h: -30, p: 0, r: 0},     // loc1
+                // {x: 129.12106819150750, y: 35.579583803822345, z: 125, h: 150, p: 0, r: 0},     // loc1
+                // {x: 129.12107030202952, y: 35.579721659430610, z: 125, h: 150, p: 0, r: 0},     // loc1
+            ],
+        }
+
+        const moveToPosition = {
+            loc1: {
+                x: -3276825.717768809,
+                y: 4029168.574444506,
+                z: 3690414.9724016828,
+                h: 0.7922547342673596,
+                p: -0.6682863769750242,
+                r: 6.283183668174316
+            },
+            loc2: {
+                x: -3276862.7508195224,
+                y: 4028978.061439098,
+                z: 3690557.7194517967,
+                h: 0.958656147421884,
+                p: -0.41579527456981524,
+                r: 0.0000013011300854515184
+            },
+            loc3: {
+                x: -3277794.6259303573,
+                y: 4029647.9073679964,
+                z: 3688977.506950604,
+                h: 4.109779982537481,
+                p: -0.7198815653303567,
+                r: 0.0000016275193974735203
+            }
+        }
+
+        const _dataSourceCCTV = new Cesium.CustomDataSource("CCTV");
+        const _dataSourcePoint = new Cesium.CustomDataSource("point");
+        const _dataSourceCone = new Cesium.CustomDataSource("Cone");
+        const _dataSourceLOS = new Cesium.CustomDataSource("LOS");
+        const _dataSourceRED = new Cesium.CustomDataSource("RED");
+        viewer.dataSources.add(_dataSourceCCTV);
+        viewer.dataSources.add(_dataSourcePoint);
+        viewer.dataSources.add(_dataSourceCone);
+        viewer.dataSources.add(_dataSourceLOS);
+        viewer.dataSources.add(_dataSourceRED);
+
+        const moveTo = (key) => {
+            flyTo(moveToPosition[key]);
+        }
+        
+        const loadModel = (assetId) => {
+            return Cesium.IonResource.fromAssetId(assetId);
+        }
+
+        // CCTV 객체 
+        const loadCCTV = async () => {
+            const resource = await loadModel(model.assetId);
+
+            // CCTV 위치를 확인하고, GLFT 모델을 올리는 부분
+            for (let index = 0; index < model.dataList.length; index++) {
+                const data = model.dataList[index];
+                const position = Cesium.Cartesian3.fromDegrees(data.x, data.y);
+                const positionWithTerrain = await newCartesianWithTerrain(position);
+                const heading = Cesium.Math.toRadians(CCTV_DEFAULT_DEGREE+data.h);
+                const hpr = new Cesium.HeadingPitchRoll(heading, data.p, data.r);
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(positionWithTerrain, hpr);
+
+                // CCTV 모델
+                addModelEntity(_dataSourceCCTV, resource, positionWithTerrain, orientation);
+
+			    // 높이 TEST 용 - 파란색 점
+                addPointEntity(_dataSourcePoint, positionWithTerrain, Cesium.Color.BLUE);
+            }
+        }
+
+        // 노란색 조명
+        const loadCone = () => {
+            clearCone();
+
+            // 전체 CCTV On
+            
+            const cctvEntities = _dataSourceCCTV.entities.values;
+            for (let index = 0; index < cctvEntities.length; index++) {
+                const entity = cctvEntities[index];
+
+                const wktData = "POLYHEDRALSURFACE Z (((129.12284977442852 35.58106985187442 117.47297520806823,129.12284896613482 35.58107260225244 117.5219360841988,129.12284218824405 35.58104629152132 120.70353256975784,129.12284977442852 35.58106985187442 117.47297520806823)),((129.12284896613482 35.58107260225244 117.5219360841988,129.12284764111072 35.58107521547402 117.57262419983994,129.12284218824405 35.58104629152132 120.70353256975784,129.12284896613482 35.58107260225244 117.5219360841988)),((129.12284764111072 35.58107521547402 117.57262419983994,129.1228458319826 35.581077627192926 117.62379144132792,129.12284218824405 35.58104629152132 120.70353256975784,129.12284764111072 35.58107521547402 117.57262419983994)),((129.1228458319826 35.581077627192926 117.62379144132792,129.12284358329723 35.58107977802463 117.67417790414574,129.12284218824405 35.58104629152132 120.70353256975784,129.1228458319826 35.581077627192926 117.62379144132792)),((129.12284358329723 35.58107977802463 117.67417790414574,129.12284095042463 35.58108161500848 117.72254290678562,129.12284218824405 35.58104629152132 120.70353256975784,129.12284358329723 35.58107977802463 117.67417790414574)),((129.12284095042463 35.58108161500848 117.72254290678562,129.12283799819497 35.58108309291185 117.7676955391302,129.12284218824405 35.58104629152132 120.70353256975784,129.12284095042463 35.58108161500848 117.72254290678562)),((129.12283799819497 35.58108309291185 117.7676955391302,129.1228347993019 35.581084175343776 117.80852399451418,129.12284218824405 35.58104629152132 120.70353256975784,129.12283799819497 35.58108309291185 117.7676955391302)),((129.1228347993019 35.581084175343776 117.80852399451418,129.12283143251284 35.58108483565124 117.84402294115434,129.12284218824405 35.58104629152132 120.70353256975784,129.1228347993019 35.581084175343776 117.80852399451418)),((129.12283143251284 35.58108483565124 117.84402294115434,129.12282798072937 35.58108505757523 117.87331827374602,129.12284218824405 35.58104629152132 120.70353256975784,129.12283143251284 35.58108483565124 117.84402294115434)),((129.12282798072937 35.58108505757523 117.87331827374602,129.1228245289459 35.58108483565122 117.89568864554822,129.12284218824405 35.58104629152132 120.70353256975784,129.12282798072937 35.58108505757523 117.87331827374602)),((129.1228245289459 35.58108483565122 117.89568864554822,129.12282116215684 35.581084175343804 117.91058322586453,129.12284218824405 35.58104629152132 120.70353256975784,129.1228245289459 35.58108483565122 117.89568864554822)),((129.12282116215684 35.581084175343804 117.91058322586453,129.1228179632638 35.58108309291183 117.91763525397862,129.12284218824405 35.58104629152132 120.70353256975784,129.12282116215684 35.581084175343804 117.91058322586453)),((129.1228179632638 35.58108309291183 117.91763525397862,129.1228150110341 35.5810816150085 117.91667109128092,129.12284218824405 35.58104629152132 120.70353256975784,129.1228179632638 35.58108309291183 117.91763525397862)),((129.1228150110341 35.5810816150085 117.91667109128092,129.1228123781615 35.581079778024616 117.90771447725376,129.12284218824405 35.58104629152132 120.70353256975784,129.1228150110341 35.5810816150085 117.91667109128092)),((129.1228123781615 35.581079778024616 117.90771447725376,129.12281012947616 35.58107762719291 117.89098595356569,129.12284218824405 35.58104629152132 120.70353256975784,129.1228123781615 35.581079778024616 117.90771447725376)),((129.12281012947616 35.58107762719291 117.89098595356569,129.12280832034804 35.581075215474 117.86689743110155,129.12284218824405 35.58104629152132 120.70353256975784,129.12281012947616 35.58107762719291 117.89098595356569)),((129.12280832034804 35.581075215474 117.86689743110155,129.1228069953239 35.58107260225243 117.836042051306,129.12284218824405 35.58104629152132 120.70353256975784,129.12280832034804 35.581075215474 117.86689743110155)),((129.1228069953239 35.58107260225243 117.836042051306,129.12280618703025 35.5810698518744 117.7991795759973,129.12284218824405 35.58104629152132 120.70353256975784,129.1228069953239 35.58107260225243 117.836042051306)),((129.12280618703025 35.5810698518744 117.7991795759973,129.1228059153698 35.58106703206336 117.75721768291179,129.12284218824405 35.58104629152132 120.70353256975784,129.12280618703025 35.5810698518744 117.7991795759973)),((129.1228059153698 35.58106703206336 117.75721768291179,129.12280618703176 35.581064212252414 117.71118961210398,129.12284218824405 35.58104629152132 120.70353256975784,129.1228059153698 35.58106703206336 117.75721768291179)),((129.12280618703176 35.581064212252414 117.71118961210398,129.1228069953268 35.58106146187467 117.66222872924016,129.12284218824405 35.58104629152132 120.70353256975784,129.12280618703176 35.581064212252414 117.71118961210398)),((129.1228069953268 35.58106146187467 117.66222872924016,129.12280832035205 35.5810588486535 117.6115406123898,129.12284218824405 35.58104629152132 120.70353256975784,129.1228069953268 35.58106146187467 117.66222872924016)),((129.12280832035205 35.5810588486535 117.6115406123898,129.12281012948083 35.581056436935164 117.56037337408122,129.12284218824405 35.58104629152132 120.70353256975784,129.12280832035205 35.5810588486535 117.6115406123898)),((129.12281012948083 35.581056436935164 117.56037337408122,129.12281237816646 35.58105428610406 117.50998691799904,129.12284218824405 35.58104629152132 120.70353256975784,129.12281012948083 35.581056436935164 117.56037337408122)),((129.12281237816646 35.58105428610406 117.50998691799904,129.1228150110388 35.58105244912082 117.46162192661919,129.12284218824405 35.58104629152132 120.70353256975784,129.12281237816646 35.58105428610406 117.50998691799904)),((129.1228150110388 35.58105244912082 117.46162192661919,129.12281796326775 35.58105097121799 117.41646930933325,129.12284218824405 35.58104629152132 120.70353256975784,129.1228150110388 35.58105244912082 117.46162192661919)),((129.12281796326775 35.58105097121799 117.41646930933325,129.12282116215974 35.581049888786495 117.37564086924289,129.12284218824405 35.58104629152132 120.70353256975784,129.12281796326775 35.58105097121799 117.41646930933325)),((129.12282116215974 35.581049888786495 117.37564086924289,129.1228245289474 35.58104922847934 117.34014193711619,129.12284218824405 35.58104629152132 120.70353256975784,129.12282116215974 35.581049888786495 117.37564086924289)),((129.1228245289474 35.58104922847934 117.34014193711619,129.12282798072937 35.58104900655544 117.31084661719817,129.12284218824405 35.58104629152132 120.70353256975784,129.1228245289474 35.58104922847934 117.34014193711619)),((129.12282798072937 35.58104900655544 117.31084661719817,129.12283143251136 35.58104922847934 117.28847625465116,129.12284218824405 35.58104629152132 120.70353256975784,129.12282798072937 35.58104900655544 117.31084661719817)),((129.12283143251136 35.58104922847934 117.28847625465116,129.12283479929903 35.581049888786495 117.2735816810681,129.12284218824405 35.58104629152132 120.70353256975784,129.12283143251136 35.58104922847934 117.28847625465116)),((129.12283479929903 35.581049888786495 117.2735816810681,129.12283799819102 35.58105097121799 117.26652965200017,129.12284218824405 35.58104629152132 120.70353256975784,129.12283479929903 35.581049888786495 117.2735816810681)),((129.12283799819102 35.58105097121799 117.26652965200017,129.12284095041997 35.58105244912081 117.2674938122993,129.12284218824405 35.58104629152132 120.70353256975784,129.12283799819102 35.58105097121799 117.26652965200017)),((129.12284095041997 35.58105244912081 117.2674938122993,129.12284358329228 35.58105428610406 117.27645041824523,129.12284218824405 35.58104629152132 120.70353256975784,129.12284095041997 35.58105244912081 117.2674938122993)),((129.12284358329228 35.58105428610406 117.27645041824523,129.1228458319779 35.58105643693516 117.29317893070521,129.12284218824405 35.58104629152132 120.70353256975784,129.12284358329228 35.58105428610406 117.27645041824523)),((129.1228458319779 35.58105643693516 117.29317893070521,129.1228476411067 35.581058848653534 117.31726744107756,129.12284218824405 35.58104629152132 120.70353256975784,129.1228458319779 35.58105643693516 117.29317893070521)),((129.1228476411067 35.581058848653534 117.31726744107756,129.12284896613193 35.58106146187466 117.34812280636034,129.12284218824405 35.58104629152132 120.70353256975784,129.1228476411067 35.581058848653534 117.31726744107756)),((129.12284896613193 35.58106146187466 117.34812280636034,129.12284977442698 35.5810642122524 117.384985265571,129.12284218824405 35.58104629152132 120.70353256975784,129.12284896613193 35.58106146187466 117.34812280636034)),((129.12284977442698 35.5810642122524 117.384985265571,129.12285004608893 35.58106703206336 117.42694714490817,129.12284218824405 35.58104629152132 120.70353256975784,129.12284977442698 35.5810642122524 117.384985265571)),((129.12285004608893 35.58106703206336 117.42694714490817,129.12284977442852 35.58106985187442 117.47297520806823,129.12284218824405 35.58104629152132 120.70353256975784,129.12285004608893 35.58106703206336 117.42694714490817)))"; 
+                const polygons = [];
+                const coordinates = wktData.substring(24, wktData.length - 3); // Remove "POLYHEDRALSURFACE Z ((" and "))"
+                const faces = coordinates.split(')),((');
+
+                for (const face of faces) {
+                    const points = face.split(',').map(coord => coord.trim().split(' '));
+                    const polygon = points.map(coordPair => {
+                        return Cesium.Cartesian3.fromDegrees(
+                            coordPair[0],
+                            coordPair[1],
+                            coordPair[2]
+                        );
+                    });
+                   //polygon.splice(polygon.length-1, 1);
+                    polygons.push(polygon);
+                }
+
+                polygons.forEach((polygon, i) => {
+                    
+                    viewer.entities.add({
+                        polygon: {
+                            hierarchy: polygon,
+                            perPositionHeight: true,
+                            outline: false,
+                            material: Cesium.Color.fromAlpha(Cesium.Color.YELLOW, parseFloat(0.2)),
+                        }
+                    });
+                });
+            }
+
+            // const cctvEntities = _dataSourceCCTV.entities.values;
+            // for (let index = 0; index < cctvEntities.length; index++) {
+            //     const entity = cctvEntities[index];
+            //     computeCircle(entity, (array) => {
+            //         const hierarchy = new Cesium.PolygonHierarchy(array);
+            //         addPolygonEntity(_dataSourceCone, hierarchy);
+            //     });
+            // } 
+        }
+
+        // Line Of Sight
+        const loadLOS = () => {
+            clearLOS();
+
+            if(selectedCCTV) {
+                computeCircle(selectedCCTV, (array) => {
+                    const [bottomPosition, topPosition] = array;
+                    addLOSEntity(_dataSourceLOS, topPosition, bottomPosition)
+                });
+            }
+        }
+
+        // 조명과 LOS의 좌표 계산
+        const computeCircle = async (entity, callback) => {
+            // CCTV 모델의 clampToGround 된 위치 구하기
+            const position = entity.position.getValue(viewer.clock.currentTime);
+            const clampToGroundPosition = await newCartesianWithTerrain(position);
+            const hpr = Cesium.HeadingPitchRoll.fromQuaternion(entity.orientation.getValue(), new Cesium.HeadingPitchRoll(0,0,0));
+            const heading = Cesium.Math.toDegrees(hpr.heading);
+            const carto = viewer.scene.globe.ellipsoid.cartesianToCartographic(clampToGroundPosition);
+            const lon = Cesium.Math.toDegrees(carto.longitude);
+            const lat = Cesium.Math.toDegrees(carto.latitude);
+            const height = carto.height;
+            
+            // 조명의 위치
+            const topPosition = geoMove(lon, lat, height + CCTV_HEIGHT, heading - 80, LENS_DISTANCE);
+            const centerPosition = geoMove(lon, lat, height, heading - 80, MOVE_DISTANCE);
+            const center = await newCartesianWithTerrain(centerPosition, 0, 0, 0);
+            const circlePositions = await getCircleBoundries(center, CIRCLE_RADIUS, CIRCLE_DENSITY);
+            
+            // 위치 확인용 - 빨간색 점
+            addPointEntity(_dataSourceRED, center);
+
+            let positionArray = [];
+            for (let i = 0; i < circlePositions.length; i++) {
+                let j = ((i+1) === circlePositions.length) ? 0 : i + 1;
+                positionArray.push([circlePositions[i], topPosition, circlePositions[j]]);
+            }
+            
+            for (let k = 0; k < positionArray.length; k++) {
+                callback(positionArray[k]);
+            }
+
+            let first = [];
+            for (let i = 0; i < circlePositions.length -1; i++) {
+
+                var carto_i = Cesium.Ellipsoid.WGS84.cartesianToCartographic(circlePositions[i]);
+                var lon_i = Cesium.Math.toDegrees(carto_i.longitude);
+                var lat_i = Cesium.Math.toDegrees(carto_i.latitude);
+                var height_i = carto_i.height;
+
+                const next = (i + 1 === circlePositions.length)? 0 : i + 1;
+                var carto_ii = Cesium.Ellipsoid.WGS84.cartesianToCartographic(circlePositions[next]);
+                var lon_ii = Cesium.Math.toDegrees(carto_ii.longitude);
+                var lat_ii = Cesium.Math.toDegrees(carto_ii.latitude);
+                var height_ii = carto_ii.height;
+
+                var carto_top = Cesium.Ellipsoid.WGS84.cartesianToCartographic(topPosition);
+                var lon_top = Cesium.Math.toDegrees(carto_top.longitude);
+                var lat_top = Cesium.Math.toDegrees(carto_top.latitude);
+                var height_top = carto_top.height;
+
+
+                let arr = [];
+                const points = [
+                    {x: lon_i, y: lat_i, z: height_i},
+                    {x: lon_ii, y: lat_ii, z: height_ii},
+                    {x: lon_top, y: lat_top, z: height_top},
+                    {x: lon_i, y: lat_i, z: height_i}
+                ];
+
+                points.forEach((p, index)=>{
+                    arr.push(p.x + " " + p.y + " " + p.z);
+                    //if(i + 1 !== circlePositions.length) {
+                        if(index===0 ) {
+                            first.push(p.x + " " + p.y + " " + p.z);
+                        }
+                    //}
+                })
+                console.log("((", arr.join(", "), ")),");
+            }
+            first.reverse();
+            first.unshift(first[first.length-1]);
+            console.log("((", first.join(", "), "))");
+
+        }
+        
+        const addModelEntity = (datasource, resource, position, orientation) => {
+            datasource.entities.add({
+                model: {
+                    uri: resource,
+                    //heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                },
+                position: position,
+                orientation: orientation,
+                type: "cctv"
+            });
+        }
+
+        const addPointEntity = (datasource, position, color = Cesium.Color.RED) => {
+            datasource.entities.add({
+                point: {
+                    pixelSize: 5,
+                    color: color,
+                    outlineColor: Cesium.Color.WHITE,
+                    outlineWidth: 2,
+                },
+                position: position,
+            });
+        }
+
+        const addPolyLineEntity = (datasource, position1, position2, width, material, visibleDepthFail = false) => {
+            // PolylineGraphics
+            datasource.entities.add({
+                polyline: {
+                    positions: [position1, position2],
+                    arcType: Cesium.ArcType.NONE,
+                    width: width,
+                    material: material,
+                    depthFailMaterial: visibleDepthFail ? material : null,
+                },
+            });
+        }
+        
+        const addPolygonEntity = (datasource, hierarchy) => {
+            // let arr = [];
+            // hierarchy.positions.push(hierarchy.positions[0])
+            // hierarchy.positions.forEach((p)=>{
+            //     arr.push(p.x + " " + p.y + " " + p.z);
+            // });
+            // console.log("((", arr.join(","), ")),");
+
+            datasource.entities.add({
+                polygon: {
+                    hierarchy: hierarchy,
+                    perPositionHeight: true,
+                    outline: false,
+                    material: Cesium.Color.fromAlpha(Cesium.Color.YELLOW, parseFloat(0.2)),
+                }
+            });
+        }
+
+        const addLOSEntity = (datasource, top, bottom) => {
+            const difference = Cesium.Cartesian3.subtract(bottom, top, new Cesium.Cartesian3());
+            const direction = Cesium.Cartesian3.normalize(difference, new Cesium.Cartesian3());
+            const ray = new Cesium.Ray(top, direction);
+            const objectsToExclude = [
+                ..._dataSourceCCTV.entities.values,
+                ..._dataSourceCone.entities.values, 
+                ..._dataSourceLOS.entities.values, 
+            ];
+            const result = viewer.scene.pickFromRay(ray, objectsToExclude);
+
+            if (result && result?.position) {
+                const successMaterial = new Cesium.PolylineGlowMaterialProperty({
+                    color: Cesium.Color.GREEN,
+                    glowPower: 0.05,
+                });
+                const failMaterial = new Cesium.PolylineOutlineMaterialProperty({
+                    color: Cesium.Color.RED.withAlpha(0.5),
+                    outlineWidth: 0
+                });
+                addPolyLineEntity(datasource, top, result.position, 30, successMaterial);
+                addPolyLineEntity(datasource, result.position, bottom, 3, failMaterial, true);
+            }
+        }
+
+        const clearCone = () => {
+            _dataSourceRED.entities.removeAll();
+            _dataSourceCone.entities.removeAll();
+        }
+
+        const clearLOS = () => {
+            _dataSourceRED.entities.removeAll();
+            _dataSourceLOS.entities.removeAll();
+        }
+        
+        const newCartesianWithTerrain = async (position, a = 0, b = 0, c = 0) => {
+            const cartographicLocation = Cesium.Cartographic.fromCartesian(position);
+            return await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [cartographicLocation])
+                .then(function (updatedLocation) {
+                    // 높이 정보가 업데이트된 cartographicLocation을 Cartesian3 형태로 변환한다.
+                    const updatedCartesianLocation = Cesium.Cartesian3.fromRadians(
+                        updatedLocation[0].longitude,
+                        updatedLocation[0].latitude,
+                        updatedLocation[0].height
+                    );
+                    return updatedCartesianLocation;
+            });
+        }
+
+        const geoMove = (lon, lat, height, degree, distance) => {
+            const x = Cesium.Math.toRadians(lon);
+            const y = Cesium.Math.toRadians(lat);
+            const radian = Cesium.Math.toRadians(degree);
+            const length = distance / FACTOR;   // 단위: km
+
+            const moveY = Math.asin(Math.sin(y) * Math.cos(length) + Math.cos(y) * Math.sin(length) * Math.cos(radian));
+            const moveX = x + Math.atan2(Math.sin(radian) * Math.sin(length) * Math.cos(y), Math.cos(length) - Math.sin(y) * Math.sin(moveY));
+
+            const moveLon = Cesium.Math.toDegrees(moveX);
+            const moveLat = Cesium.Math.toDegrees(moveY);
+
+            return Cesium.Cartesian3.fromDegrees(moveLon, moveLat, height);
+        }
+
+        const getCircleBoundries = async (center, radius, density = 0.009) => {
+            const ellipsePositions = Cesium.EllipseGeometryLibrary.computeEllipsePositions({
+                center: center,
+                semiMajorAxis: radius,
+                semiMinorAxis: radius,
+                rotation: 0,
+                granularity: density,
+            }, false, true);    //options, addFillPositions, addEdgePositions
+
+            if (!ellipsePositions || !ellipsePositions.outerPositions) {
+                return [];
+            }
+
+            const points = Cesium.Cartesian3.unpackArray(ellipsePositions.outerPositions);
+            const editPoints = await Promise.all(
+                points.map(element => newCartesianWithTerrain(element, 0, 0, 0))
+            )
+            
+            editPoints[editPoints.length] = editPoints[0];  // first point
+            return editPoints;
+        }
+
+        const rotate = (sign) => {
+            const moveDegree = Number(document.getElementById("moveDegree").value) || 0;
+            document.getElementById("moveDegreeHidden").value = moveDegree;
+
+            const originPosition = selectedCCTV.position.getValue();
+            const originOrientation = selectedCCTV.orientation.getValue();  // Quaternion
+
+            const originHPR = Cesium.HeadingPitchRoll.fromQuaternion(originOrientation, new Cesium.HeadingPitchRoll(0,0,0));
+            const originHeading = Cesium.Math.toDegrees(originHPR.heading);
+            const newHeading = Cesium.Math.toRadians(moveDegree*sign*(-1)); // 변경할 heading 값 (라디안으로 변환)
+
+            const axis = new Cesium.Cartesian3(0, 0, 1); // 회전 축 (Z축 기준으로 회전)
+            const rotationQuaternion = Cesium.Quaternion.fromAxisAngle(axis, newHeading); // 회전 Quaternion 생성
+            const newOrientation = Cesium.Quaternion.multiply(originOrientation, rotationQuaternion, new Cesium.Quaternion(0, 0, 0, 0)); // 현재 Quaternion에 회전 적용
+            
+            selectedCCTV.orientation.setValue(newOrientation);
+
+            loadLOS();
+        }
+
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction((movement) => {
+            let pickedFeature = viewer.scene.pick(movement.position);
+            if(Cesium.defined(pickedFeature)) {
+                const pickedCCTV = _dataSourceCCTV.entities.values.find((cctv) => cctv === pickedFeature.id);
+                selectedCCTV = pickedCCTV || null;
+                changeUI();
+                if(selectedCCTV) {
+                    loadLOS();
+                }
+            } else {
+                if(selectedCCTV) {
+                    selectedCCTV = null;
+                    clearLOS();
+                    changeUI();
+                }
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        const changeUI = () => {
+            const selectedInfo = document.getElementById("selected-cctv");
+            const notSelectedInfo = document.getElementById("not-selected-cctv");
+
+            if(selectedCCTV) {
+                selectedInfo.style.display = "block";
+                notSelectedInfo.style.display = "none";
+            } else {
+                selectedInfo.style.display = "none";
+                notSelectedInfo.style.display = "block";
+            }
+        }
+
+        const saveUserPosition = () => {
+            const position = {
+                x: viewer.camera.position.x,
+                y: viewer.camera.position.y,
+                z: viewer.camera.position.z,
+                h: viewer.camera.heading,
+                p: viewer.camera.pitch,
+                r: viewer.camera.roll 
+            }
+            window.localStorage.setItem("position", JSON.stringify(position));
+        }
+
+        const deleteUserPosition = () => {
+            window.localStorage.removeItem("position");
+        }
+
+        const getUserPosition = () => {
+            return JSON.parse(window.localStorage.getItem("position"));
+        }
+
+        const flyTo = (location) => {
+            const defaultPosition = {
+                x: -3280686.756404731,
+                y: 4045131.289152038,
+                z: 3692117.0218876083,
+                h: 0.8437411366659617,
+                p: -0.9150366950557816,
+                r: 0.0001398575659132817
+            }
+
+            const position = location || defaultPosition;
+            viewer.camera.flyTo({
+                destination : new Cesium.Cartesian3(position.x, position.y ,  position.z),
+                orientation: {heading: position.h, pitch: position.p, roll: position.r}
+            });
+        }
+        
+        flyTo(getUserPosition());
+        loadCCTV();
+
+    </script>
+    </div>
+</body>
+
+</html>

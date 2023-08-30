@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: new Cesium.CesiumTerrainProvider({
+                url: "http://175.197.92.213:10502/ujterrain"
+            })
+        });
+
+        // tileset
+        const tilesetURL = "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json";
+        const tileset = new Cesium.Cesium3DTileset({
+            url: tilesetURL,
+            customShader: new Cesium.CustomShader({
+                // uniforms: {
+                //     u_colorIndex: {
+                //         type: Cesium.UniformType.FLOAT,
+                //         value: 1.0
+                //     },
+                //     u_normalMap: {
+                //         type: Cesium.UniformType.SAMPLER_2D,
+                //         value: new Cesium.TextureUniform({
+                //             url: "https://cdn.pixabay.com/photo/2017/06/05/00/01/poppy-2372550_1280.png"
+                //         })
+                //     }
+                // },
+                // varyings: {
+                //     v_selectedColor: Cesium.VaryingType.VEC3
+                // },
+                // vertexShaderText: "attribute vec3 position;\n" +
+                //     "uniform mat4 modelViewProjectionMatrix;\n" +
+                //     "void main() {\n" +
+                //     "    gl_Position = modelViewProjectionMatrix * vec4(position, 1.0);\n" +
+                //     "}",
+                // fragmentShaderText: "precision mediump float;\n" +
+                //     "uniform vec4 color;\n" +
+                //     "void main() {\n" +
+                //     "    gl_FragColor = color;\n" +
+                //     "}"
+            }),
+        });
+
+        const tilesetLayer = viewer.scene.primitives.add(tileset);
+        tilesetLayer.style = new Cesium.Cesium3DTileStyle({
+            color: {
+                evaluateColor: (feature, result) => {
+                    return Cesium.Color.RED;
+                }
+            }
+        });
+        
+        // 건수: 79,253건
+        viewer.camera.flyTo({
+            destination : new Cesium.Cartesian3(-3285860.322977005, 4023074.476080044, 3689653.828481646),
+            orientation: {heading: 0.27398450762347615, pitch: -0.8170871307073644, roll: 0.0000155055898822809}
+        });
+
+    </script>
+    </div>
+</body>
+
+</html>

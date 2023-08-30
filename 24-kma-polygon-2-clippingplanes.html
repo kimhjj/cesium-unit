@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+			left: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script type="text/javascript">
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		const viewer = new Cesium.Viewer("cesiumContainer");
+		const scene = viewer.scene;
+
+		let targetY = 0.0;
+		let planeEntities = [];
+		// let clippingPlanes;
+
+        // const texturedPolygon = viewer.entities.add({
+		// 	name: "1000hpa",
+		// 	polygon: {
+		// 		hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights([
+		// 			-118.4, 40.4, 50000,
+		// 			-118.4, 37, 30000,
+		// 			-114.2, 38.0, 35000,
+		// 			-108.0, 37, 30000,
+		// 			-108.0, 40.4, 50000,
+		// 		]),
+		// 		textureCoordinates: {
+		// 			positions: [
+		// 				new Cesium.Cartesian2(0, 1),
+		// 				new Cesium.Cartesian2(0, 0),
+		// 				new Cesium.Cartesian2(0.5, 0),
+		// 				new Cesium.Cartesian2(1, 0),
+		// 				new Cesium.Cartesian2(1, 1),
+		// 			],
+		// 		},
+		// 		perPositionHeight: true,
+		// 		extrudedHeight: 0,
+		// 		material: "./file/1675248788DJI_0571.jpg",
+		// 	},
+		// });
+
+		// viewer.zoomTo(viewer.entities); 
+
+		const positions = Cesium.Cartesian3.fromDegreesArray([
+			-118.4, 40.4,
+			-118.4, 37,
+			-114.2, 38.0,
+			-108.0, 37,
+			-108.0, 40.4,
+		]);
+
+		const hierarchy = new Cesium.PolygonHierarchy(positions);
+		const polygonGeometry = Cesium.PolygonGeometry.createGeometry(new Cesium.PolygonGeometry({
+			polygonHierarchy: hierarchy,
+			extrudedHeight: 30000,
+			textureCoordinates: {
+				positions: [
+					new Cesium.Cartesian2(0, 1),
+					new Cesium.Cartesian2(0, 0),
+					new Cesium.Cartesian2(0.5, 0),
+					new Cesium.Cartesian2(1, 0),
+					new Cesium.Cartesian2(1, 1),
+				],
+			},
+		}));
+
+		// MaterialAppearance를 사용하여 폴리곤에 이미지 텍스처 적용
+		const materialAppearance = new Cesium.MaterialAppearance({
+			material: new Cesium.Material({
+				translucent: true,
+				//minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+				fabric: {
+					type: 'Image',
+					uniforms: {
+						image: './file/1675248788DJI_0571.jpg'
+					}
+				}
+			}),
+		});
+
+		// 2. 클리핑 평면 생성
+		let clippingPlanes = new Cesium.ClippingPlaneCollection({
+			planes: [
+				new Cesium.ClippingPlane(
+					new Cesium.Cartesian3(0.0, 0.0, -1.0),
+					0.0
+				),
+			],
+			edgeWidth: 1.0
+		});
+
+		// 3. 원시 객체 생성
+		const primitive = new Cesium.Primitive({
+			geometryInstances: new Cesium.GeometryInstance({
+				geometry: polygonGeometry,
+				attributes: {
+					color: new Cesium.ColorGeometryInstanceAttribute(1, 0, 0, 0.8),
+				},
+			}),
+			appearance: materialAppearance,
+			clippingPlanes: clippingPlanes,
+		});
+
+		// 4. 원시 객체를 뷰어에 추가
+		viewer.scene.primitives.add(primitive);
+		//viewer.zoomTo(viewer.entities);
+
+		primitive.debugShowBoundingVolume = false;
+		const boundingSphere = primitive.geometryInstances.geometry.boundingSphere;
+		const radius = primitive.geometryInstances.geometry.boundingSphere.radius;
+		const center = primitive.geometryInstances.geometry.boundingSphere.center;
+
+		console.log(boundingSphere, radius);
+
+		// clippingPlane 높이 변경시 실행
+		const createPlaneUpdateFunction = (plane) => {
+			return () => {
+				plane.distance = this.targetY;
+				return plane;
+			};
+		}
+
+		targetY = 40000;
+
+		for (let i = 0; i < clippingPlanes.length; ++i) {
+			const plane = clippingPlanes.get(i);
+			const planeEntity = viewer.entities.add({
+				position: center,
+				plane: {
+					dimensions: new Cesium.Cartesian2(radius * 2.5, radius * 2.5),
+					material: Cesium.Color.WHITE.withAlpha(0.1),
+					plane: new Cesium.CallbackProperty(
+						createPlaneUpdateFunction(plane),
+						false
+					),
+					outline: true,
+					outlineColor: Cesium.Color.WHITE,
+				},
+			});
+
+			planeEntities.push(planeEntity);
+		}
+
+		const createHandler = () => {
+			
+			let selectedPlane = undefined;
+			const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+			handler.setInputAction(function (movement) {
+				const pickedObject = scene.pick(movement.position);
+		
+				if (
+					Cesium.defined(pickedObject) && 
+					Cesium.defined(pickedObject.id) && 
+					Cesium.defined(pickedObject.id.plane)
+				) {
+					selectedPlane = pickedObject.id.plane;
+					selectedPlane.material = Cesium.Color.WHITE.withAlpha(0.05);
+					selectedPlane.outlineColor = Cesium.Color.WHITE;
+					scene.screenSpaceCameraController.enableInputs = false;
+				}
+			}, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+			handler.setInputAction(function () {
+				if (Cesium.defined(selectedPlane)) {
+					selectedPlane.material = Cesium.Color.WHITE.withAlpha(0.1);
+					selectedPlane.outlineColor = Cesium.Color.WHITE;
+					selectedPlane = undefined;
+				}
+
+				scene.screenSpaceCameraController.enableInputs = true;
+			}, Cesium.ScreenSpaceEventType.LEFT_UP);
+
+			handler.setInputAction(function (movement) {
+				if (Cesium.defined(selectedPlane)) {
+					const deltaY = movement.startPosition.y - movement.endPosition.y;
+					targetY += deltaY;
+				}
+			}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+		}
+
+		createHandler();
+		
+	
+		// 다각형 정의
+		// var polygon = new Cesium.PolygonGraphics({
+		// 	hierarchy: Cesium.Cartesian3.fromDegreesArray([
+		// 		115.0, 37.0,
+		// 		115.0, 32.0,
+		// 		107.0, 33.0,
+		// 		102.0, 31.0,
+		// 		102.0, 35.0
+		// 	]),
+		// 	material: Cesium.Color.BLUE.withAlpha(0.5)
+		// });
+
+		// // 다각형을 Entity에 추가
+		// var entity = viewer.entities.add({
+		// 	polygon: polygon
+		// });
+		// viewer.zoomTo(entity);
+
+		// // 클리핑 플레인 정의
+		// var clippingPlane = new Cesium.ClippingPlane(new Cesium.Cartesian3(0.0, 0.0, -1.0), 0.0);
+
+		// entity.polygon.clippingPlanes = new Cesium.ClippingPlaneCollection({
+		// 	planes: [clippingPlane],
+		// 	edgeWidth: 100.0,
+		// 	edgeColor: Cesium.Color.WHITE
+		// });
+
+		// // 클리핑 영역 정의 (서울 경도/위도 좌표)
+		// var clippingArea = [
+		// 	[126.768204, 37.413294],
+		// 	[127.183495, 37.413294],
+		// 	[127.183495, 37.708275],
+		// 	[126.768204, 37.708275]
+		// ];
+
+		// Cesium-clip3D 라이브러리를 사용하여 다각형 클리핑
+		//Cesium.Clip3D.drawPolygonClipping(viewer, clippingArea);
+
+    </script>
+    </div>
+</body>
+
+</html>

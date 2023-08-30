@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<!-- Include the CesiumJS JavaScript and CSS files -->
+	<script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+	<script src="https://code.jquery.com/jquery-3.7.0.min.js" integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+	<script src="./jquery-ui-1.13.2.custom/jquery-ui.min.js"></script>
+	<link rel="stylesheet" href="./jquery-ui-1.13.2.custom/jquery-ui.min.css">
+	<link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+	<style>
+		body {
+			margin: 0px;
+			padding: 0px;
+			height: 100%;
+		}
+
+		#cesiumContainer {
+			position: absolute;
+			top: 0px;
+			left: 300px;
+			width: calc(100% - 300px);
+			height: 100%;
+		}
+
+		.content {
+			position: absolute;
+			top: 0px;
+			left: 0px;
+			width: 300px;
+			height: 100%;
+		}
+
+		.content>div {
+			padding: 20px;
+		}
+
+		.wrap>div {
+			margin: 10px;
+		}
+
+		.legend {
+			position: absolute;
+			top: 50px;
+			right: 20px;
+			width: 120px;
+			height: 480px;
+			padding: 20px;
+			background-color: rgba(255, 255, 255, 0.7);
+			border-radius: 20px;
+		}
+
+		.legendValue {
+			display: inline-block;
+			width: 16px;
+			height: 16px;
+			margin: 5px;
+		}
+
+		.airplane {
+			position: absolute;
+			top: 600px;
+			right: 20px;
+			width: 120px;
+			height: 200px;
+			padding: 20px;
+			background-color: rgba(255, 255, 255, 0.7);
+			border-radius: 20px;
+		}
+
+		input[type=range].slider {
+			-webkit-appearance: slider-vertical;
+			writing-mode: bt-lr;
+			width: 8px;
+			height: 100%;
+			padding: 0 5px;
+			margin-top: 15px;
+		}
+
+		.slider-text {
+			position: relative;
+			display: block;
+			left: 35px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="content">
+		<div>
+			<div>2023년 06월 25일 18시 h000</div>
+			<div>1.5km 등압면</div>
+			<div>
+				<label><input type="radio" name="element" value="TMP" />기온</label>
+				<label><input type="radio" name="element" value="WSD" />풍속</label>
+			</div>
+			<div>
+				<label><input type="radio" name="element" value="JET" />제트기류</label>
+				<label><input type="radio" name="element" value="UVW" checked="checked" />바람</label>
+				<!-- document.querySelectorAll('input[name="element"]:checked')[0].value -->
+			</div>
+			<div>
+				<label><input type="checkbox" id="isTrans" checked="checked" />투명도 적용</label>
+				<!-- document.getElementById("isTrans").checked -->
+			</div>
+		</div>
+		<!-- <div style="display: flex;">
+			<div class="wrap" style="width: 50%; background-color: bisque;">
+				<div>
+					<label for="check-all"><input type="checkbox" id="check-all" checked="true" onchange="" />전체</label>
+				</div>
+				<div id="checkboxArea"></div>
+			</div>
+			<div class="wrap" style="width: 50%; background-color: thistle;">
+				<div>높이</div>
+				<div id="rangeArea"></div>
+			</div>
+		</div> -->
+		<div>
+			<label for="label-range-x">longitude range:</label>
+			<input type="text" id="label-range-x" readonly style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-x"></div>
+
+			<label for="label-range-y">latitude range:</label>
+			<input type="text" id="label-range-y" readonly style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-y"></div>
+
+			<label for="label-range-p">pressure range:</label>
+			<input type="text" id="label-range-p" readonly style="border:0; color:#f6931f; font-weight:bold;">
+			<br />
+			<label for="label-list-p">pressures:</label>
+			<input type="text" id="label-list-p" readonly style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-p"></div>
+
+			<label for="label-range-scale">height scale:</label>
+			<input type="text" id="label-range-scale" readonly style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-scale"></div>
+		</div>
+		<div>
+			<div>
+				<label>픽셀 x <input type="text" id="color-x" size="3" value="0" /></label> 0~601
+				<br />
+				<label>픽셀 y <input type="text" id="color-y" size="3" value="0" /></label> 0~780
+				<br />
+				<label>고도 h 
+					<select id="color-h"></select>
+				</label>
+			</div>
+			<div>
+				<br />
+				<button id="color-button">값 읽기</button>
+				<span id="color-value"></span>
+			</div>
+		</div>
+	</div>
+	<div id="cesiumContainer"></div>
+
+	<div id="loading"
+		style="position: absolute; bottom: 0; top:0; right:0; left:0; background-color: #00000060; color: white; font-size: 3em; line-height: 100vh; text-align: center; vertical-align: middle;">
+		loading..</div>
+
+
+	<script type="text/javascript">
+
+		var oldTime = undefined;
+		function printTimeElapse(text) {
+			const time = new Date();
+			if (oldTime) {
+				console.log(text, time - oldTime)
+				oldTime = time;
+			}
+			else {
+				console.log('timeelapse start ', time)
+				oldTime = time;
+			}
+		}
+
+		function moveXY(sx, sy, height, movex, movey) {
+			const eastGeodesic = new Cesium.EllipsoidGeodesic(Cesium.Cartographic.fromDegrees(sx, sy, height), Cesium.Cartographic.fromDegrees(sx + 0.1, sy, height))
+			const eastPoint = eastGeodesic.interpolateUsingSurfaceDistance(movex)
+			const northGeodesic = new Cesium.EllipsoidGeodesic(eastPoint, Cesium.Cartographic.fromDegrees(eastPoint.longitude * Cesium.Math.DEGREES_PER_RADIAN, eastPoint.latitude * Cesium.Math.DEGREES_PER_RADIAN + 0.1, height))
+			const eastNorthPoint = northGeodesic.interpolateUsingSurfaceDistance(movey);
+			return eastNorthPoint;
+		}
+		
+		function generatePolygon(start, end, minHeight, maxHeight, wRange, hRange, canvas, visible) {
+			// 주어진 조건으로 rectangle 폴리곤 생성
+			// start = 시작점(최좌하단)
+			// end = 끝지점(최우상단)
+			// minHeight = 최소고도
+			// maxHeight = 최대고도
+			// wRange = 시작점~끝지점 사이에서 표시할 범위 [최소범위,최대범위] ex) [.5, 1] = 중간부터 오른쪽 반만 표시
+			// hRange = 시작점~끝지점 사이에서 표시할 범위 [최소범위,최대범위] ex) [0, 0.5] = 아래부터 중간까지만 반만 표시
+			// 
+
+			// 가로세로
+			const wh = [end.longitude - start.longitude, end.latitude - start.latitude];
+			const rangedLongitude = [start.longitude + wh[0] * wRange[0], start.longitude + wh[0] * wRange[1]];
+			const rangedLatitude = [start.latitude + wh[1] * hRange[0], start.latitude + wh[1] * hRange[1]];
+			start = Cesium.Cartographic.fromRadians(rangedLongitude[0], rangedLatitude[0], minHeight);
+			end = Cesium.Cartographic.fromRadians(rangedLongitude[1], rangedLatitude[1], minHeight);
+
+			return new Cesium.Entity({
+				// name: `Pres ${pres}`,
+				show: visible,
+				polygon: {
+					arcType: Cesium.ArcType.RHUMB,
+					hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights([
+						start.longitude * Cesium.Math.DEGREES_PER_RADIAN, start.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
+						end.longitude * Cesium.Math.DEGREES_PER_RADIAN, start.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
+						end.longitude * Cesium.Math.DEGREES_PER_RADIAN, end.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
+						start.longitude * Cesium.Math.DEGREES_PER_RADIAN, end.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
+					]),
+					height: minHeight,
+					textureCoordinates: {
+						positions: [
+							new Cesium.Cartesian2(wRange[0], hRange[0]),
+							new Cesium.Cartesian2(wRange[1], hRange[0]),
+							new Cesium.Cartesian2(wRange[1], hRange[1]),
+							new Cesium.Cartesian2(wRange[0], hRange[1]),
+						],
+					},
+					// perPositionHeight: true,
+					extrudedHeight: maxHeight,// - minHeight,
+					// fill: false,
+					// closeTop: true,
+					// closeBottom: false,
+					// heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+					// extrudedHeightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+					material: new Cesium.ImageMaterialProperty({
+						image: canvas,
+						transparent: document.getElementById("isTrans").checked
+					}),
+				}
+			});
+		}
+
+		(async function main() {
+			Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+
+			const Pressures = [50, 70, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 875, 900, 925, 950, 975, 1000]
+			const MaxHeightByPressure = {
+				50: 20841,
+				70: 18794,
+				100: 16689,
+				150: 14259,
+				200: 12462,
+				250: 10975,
+				300: 9695,
+				350: 8573,
+				400: 7574,
+				450: 6670,
+				500: 5846,
+				550: 5088,
+				600: 4386,
+				650: 3731,
+				700: 3118,
+				750: 2539,
+				800: 1992,
+				850: 1474,
+				875: 1224,
+				900: 979,
+				925: 740,
+				950: 508,
+				975: 281,
+				1000: 60,
+			}
+
+			const MinHeightByPressure = {
+				50: 18794,
+				70: 16689,
+				100: 14259,
+				150: 12462,
+				200: 10975,
+				250: 9695,
+				300: 8573,
+				350: 7574,
+				400: 6670,
+				450: 5846,
+				500: 5088,
+				550: 4386,
+				600: 3731,
+				650: 3118,
+				700: 2539,
+				750: 1992,
+				800: 1474,
+				850: 1224,
+				875: 979,
+				900: 740,
+				925: 508,
+				950: 281,
+				975: 60,
+				1000: 0,
+			}
+
+			const sx = 121.834429;
+			const sy = 32.256875;
+			const dx = 1500;
+			const dy = 1500;
+			const cx = 602;
+			const cy = 781;
+
+			const viewer = new Cesium.Viewer('cesiumContainer');
+			viewer.scene.globe.depthTestAgainstTerrain = true;
+			const datasource = new Cesium.CustomDataSource("PNG");
+       	 	viewer.dataSources.add(datasource);
+
+			const position = Cesium.Cartesian3.fromDegrees(
+				121.06,
+				32.188,
+				4386
+			);
+			const heading = Cesium.Math.toRadians(135);
+			const pitch = 0;
+			const roll = 0;
+			const hpr = new Cesium.HeadingPitchRoll(heading, pitch, roll);
+			const orientation = Cesium.Transforms.headingPitchRollQuaternion(
+				position,
+				hpr
+			);
+
+			let canvasMap = {}
+
+			// ui
+			let wRange = [0, 1];	// 전체 지역 중 표시할 범위
+			let hRange = [0, 1];	// 전체 지역 중 표시할 범위
+			let pRange = [0, 1];	// 전체 Pressure 중 표시할 범위
+			let heightScale = 10;	// 높이 스케일
+
+			printTimeElapse('start');
+
+			// generate canvas by pres
+			const canvas = Pressures.map((pres, i) => {
+				const c = document.createElement('canvas')
+				c.width = cx;
+				c.height = cy;
+				c.name = "png";
+				c.id = `canvas_${pres}`;
+				c.style.display = 'none'
+				return c;
+			});
+			canvas.forEach(c => document.body.appendChild(c));
+			canvas.forEach(c => canvasMap[c.id] = c);
+			printTimeElapse('generate canvas by pres complete');
+
+			// load images
+			loadImage();
+			printTimeElapse('load images complete');
+
+			// generate polygons
+			createPolygons();
+			printTimeElapse('generate polygons complete');
+
+			// after loading
+			viewer.zoomTo(datasource.entities);
+			document.getElementById('loading').style.display = 'none'
+
+			// change attribute
+			async function updateAttribute() {
+				await loadImage();
+				createPolygons();
+			}
+
+			// jquery ui
+			function updateRange(wRange, hRange, pRange) {
+				createPolygons();
+			}
+
+			// load png images
+			async function loadImage() {
+				const element = document.querySelectorAll('input[name="element"]:checked')[0].value;
+				for(const [i, pres] of Pressures.entries()) {
+					const canvas = canvasMap[`canvas_${pres}`];
+					const url = `./png/${element}_${i}_l015_v070_erlo_pres_h000.2023062500.png`;
+					await drawImage(canvas, url);
+				}
+			}
+
+			// draw canvas images
+			async function drawImage(canvas, url) {
+				return new Promise((resolve, reject) => {
+					const image = new Image();
+					image.src = url;
+					image.onload = () => {
+						const context = canvas.getContext('2d');
+						// context.globalCompositeOperation = "copy";
+						context.clearRect(0, 0, canvas.width, canvas.height);
+						context.drawImage(image, 0, 0, canvas.width, canvas.height);
+						resolve(); // 이미지가 로드되고 그려질 때 resolve
+					};
+					image.onerror = () => {
+						reject(); // 이미지 로드 실패 시 reject
+					};
+				});
+			}
+
+			// create polygon with image
+			function createPolygons() {
+				datasource.entities.removeAll();
+				
+				const pressureDiff = Pressures[Pressures.length - 1] - Pressures[0];
+				const pressureStart = Pressures[0] + pressureDiff * pRange[0];
+				const pressureEnd = Pressures[0] + pressureDiff * pRange[1];
+
+				const visiblePressures = Pressures.reduce((acc, pres) => {
+					const start = moveXY(sx, sy, MinHeightByPressure[pres], 0, 0);
+					const end = moveXY(sx, sy, MinHeightByPressure[pres], dx * cx, dy * cy);
+					const visible = pressureStart <= pres && pres <= pressureEnd;
+					const polygon = generatePolygon(start, end, MinHeightByPressure[pres] * heightScale, MaxHeightByPressure[pres] * heightScale, wRange, hRange, document.getElementById(`canvas_${pres}`), visible);
+					datasource.entities.add(polygon);
+
+					return visible ? [...acc, pres] : acc;
+				}, []);
+
+				// 보여지는 pres 목록 적어줌
+				$("#label-list-p").val(visiblePressures.join(","));
+			}
+
+			// read png value
+			function readPNGValue(x, y, pres) {
+				const pixelSize = 1;
+				const targetContext = canvasMap[`canvas_${pres}`].getContext('2d', { willReadFrequently: true });
+				const pixelData = targetContext.getImageData(x, y, pixelSize, pixelSize).data;
+				const r = pixelData[0];
+				const g = pixelData[1];
+				const b = pixelData[2];
+				return [r, g, b];
+			}
+
+			// jquery ui slider
+			$(function () {
+				$("#slider-range-x").slider({
+					range: true,
+					min: 0,
+					max: 1,
+					step: 1 / cx,
+					values: [0, 1],
+					slide: function (event, ui) {
+						$("#label-range-x").val(ui.values[0] + " - " + ui.values[1]);
+						wRange = [ui.values[0], ui.values[1]]
+						updateRange(wRange, hRange, pRange);
+					}
+				});
+				$("#slider-range-y").slider({
+					range: true,
+					min: 0,
+					max: 1,
+					step: 1 / cy,
+					values: [0, 1],
+					slide: function (event, ui) {
+						$("#label-range-y").val(ui.values[0] + " - " + ui.values[1]);
+						hRange = [ui.values[0], ui.values[1]]
+						updateRange(wRange, hRange, pRange);
+					}
+				});
+				$("#slider-range-p").slider({
+					range: true,
+					min: 0,
+					max: 1,
+					step: 1 / Pressures.length,
+					values: [0, 1],
+					slide: function (event, ui) {
+						pRange = [ui.values[0], ui.values[1]]
+						$("#label-range-p").val(pRange[0] + " - " + pRange[1]);
+
+						updateRange(wRange, hRange, pRange);
+					}
+				});
+				$("#slider-range-scale").slider({
+					// range: true,
+					min: 1,
+					max: 20,
+					step: 1,
+					values: [10],
+					slide: function (event, ui) {
+						$("#label-range-scale").val(ui.values[0]);
+						heightScale = [ui.values[0]]
+						updateRange(wRange, hRange, pRange);
+					}
+				});
+				$("#label-range-x").val($("#slider-range-x").slider("values", 0) + " - " + $("#slider-range-x").slider("values", 1));
+				$("#label-range-y").val($("#slider-range-y").slider("values", 0) + " - " + $("#slider-range-y").slider("values", 1));
+				$("#label-range-p").val($("#slider-range-p").slider("values", 0) + " - " + $("#slider-range-p").slider("values", 1));
+				$("#label-range-scale").val($("#slider-range-scale").slider("values", 0));
+
+				// 기상 요소 변경 & 투명도 변경
+				document.getElementById("isTrans").addEventListener('click', updateAttribute);
+				document.querySelectorAll('input[name="element"]').forEach((element)=>{
+					element.addEventListener('change', updateAttribute);
+				});
+				// color picker
+				const selectboxAltitude = document.getElementById("color-h");
+				Pressures.forEach((pres, i) => {
+					const option = document.createElement("option");
+					option.value = pres;
+					option.innerText = i + "레벨_hpa" + pres;
+					selectboxAltitude.append(option);
+				});
+				document.getElementById("color-button").addEventListener('click', () => {
+					const x = document.getElementById("color-x").value;
+					const y = document.getElementById("color-y").value;
+					const pres = document.querySelector('select[id="color-h"] > option:checked').value;
+					const [r, g, b] = readPNGValue(x, y, pres);
+					document.getElementById("color-value").innerText = [r, g, b] ;
+				});
+			});
+		})()
+
+	</script>
+	</div>
+</body>
+
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+			left: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script type="text/javascript">
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		const viewer = new Cesium.Viewer("cesiumContainer", {
+			shouldAnimate: true
+		});
+		const scene = viewer.scene;
+
+		const loadtileset = async () => {
+			// dhlee data
+			//const url = "./pnts/las-cs-tiler/tileset.json";
+			// const url = "./pnts/las-fme/tileset.json";
+
+			// batched point cloud
+			const url = "./pnts/batched-pointcloud/tileset.json";
+			const classificationTileset = await Cesium.Cesium3DTileset.fromUrl(url);
+
+			// cesium ion data
+			//const classificationTileset = await Cesium.Cesium3DTileset.fromIonAssetId(28945);
+			const tileset = viewer.scene.primitives.add(classificationTileset);
+
+			viewer.zoomTo(classificationTileset);
+			debugger
+
+			const pointCloudShading = new Cesium.PointCloudShading({
+				backFaceCulling: true,
+				attenuation: true,
+				// geometricErrorScale: 10,
+				maximumAttenuation: 10,
+				eyeDomeLightingRadius: 0.0,
+				//normalShading: false
+			});
+
+			tileset.pointCloudShading = pointCloudShading;
+			tileset.style = new Cesium.Cesium3DTileStyle({
+				// pointSize: 20,
+				//color: 'color("#FF0000", 0.1)'
+				color: {
+					evaluateColor: function(feature, result) {
+						// feature.getProperty('id');
+						// feature.getProperty('name');
+						// feature.getProperty('dimensions');
+						if(Number(feature.getProperty('id')) === 0) {
+							return Cesium.Color.RED;
+						} else {
+							return Cesium.Color.BLUE;
+						}
+					}
+					// conditions: [
+					// 	["true", "color('#FF0000', 0.1)"],
+					// ],
+				}
+			});
+		}
+		
+		loadtileset();
+
+		const highlighted = {
+			feature: undefined,
+			originalColor: new Cesium.Color(),
+		};
+
+		viewer.screenSpaceEventHandler.setInputAction(function onMouseMove(
+			movement
+		) {
+			if (Cesium.defined(highlighted.feature)) {
+				highlighted.feature.color = highlighted.originalColor;
+				highlighted.feature = undefined;
+			}
+
+			const pickedFeature = viewer.scene.pick(movement.endPosition);
+			if (!Cesium.defined(pickedFeature)) {
+				return;
+			}
+			// debugger
+
+			if (pickedFeature instanceof Cesium.Cesium3DTileFeature) {
+				// feature.getProperty('id');
+				// feature.getProperty('name');
+				// feature.getProperty('dimensions');
+
+				const propertyIds = pickedFeature.getPropertyIds();
+				const length = propertyIds.length;
+				for (let i = 0; i < length; ++i) {
+					const propertyId = propertyIds[i];
+					console.log(`{propertyId}: ${pickedFeature.getProperty(propertyId)}`);
+				}
+			}
+
+			highlighted.feature = pickedFeature;
+			Cesium.Color.clone(pickedFeature.color, highlighted.originalColor);
+			pickedFeature.color = Cesium.Color.YELLOW.withAlpha(0.5);
+		},
+		Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+		
+    </script>
+    </div>
+</body>
+
+</html>

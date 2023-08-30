@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+			left: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script type="text/javascript">
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		const viewer = new Cesium.Viewer("cesiumContainer");
+		const scene = viewer.scene;
+
+		let targetY = 0.0;
+		let planeEntities = [];
+		// let clippingPlanes;
+
+        // const texturedPolygon = viewer.entities.add({
+		// 	name: "1000hpa",
+		// 	polygon: {
+		// 		hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights([
+		// 			-118.4, 40.4, 50000,
+		// 			-118.4, 37, 30000,
+		// 			-114.2, 38.0, 35000,
+		// 			-108.0, 37, 30000,
+		// 			-108.0, 40.4, 50000,
+		// 		]),
+		// 		textureCoordinates: {
+		// 			positions: [
+		// 				new Cesium.Cartesian2(0, 1),
+		// 				new Cesium.Cartesian2(0, 0),
+		// 				new Cesium.Cartesian2(0.5, 0),
+		// 				new Cesium.Cartesian2(1, 0),
+		// 				new Cesium.Cartesian2(1, 1),
+		// 			],
+		// 		},
+		// 		perPositionHeight: true,
+		// 		extrudedHeight: 0,
+		// 		material: "./file/1675248788DJI_0571.jpg",
+		// 	},
+		// });
+
+		// viewer.zoomTo(viewer.entities); 
+
+		const positions = Cesium.Cartesian3.fromDegreesArray([
+			-118.4, 40.4,
+			-118.4, 37,
+			-114.2, 38.0,
+			-108.0, 37,
+			-108.0, 40.4,
+		]);
+
+		const hierarchy = new Cesium.PolygonHierarchy(positions);
+
+		const polygonGeometry = Cesium.PolygonGeometry.createGeometry(new Cesium.PolygonGeometry({
+			polygonHierarchy: hierarchy,
+			extrudedHeight: 30000,
+			textureCoordinates: {
+				positions: [
+					new Cesium.Cartesian2(0, 1),
+					new Cesium.Cartesian2(0, 0),
+					new Cesium.Cartesian2(0.5, 0),
+					new Cesium.Cartesian2(1, 0),
+					new Cesium.Cartesian2(1, 1),
+				],
+			},
+		}));
+
+		// MaterialAppearance를 사용하여 폴리곤에 이미지 텍스처 적용
+		const materialAppearance = new Cesium.MaterialAppearance({
+			// translucent: true,
+			material: new Cesium.Material({
+				// translucent: true,
+				//minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+				fabric: {
+					type: 'Image',
+					uniforms: {
+						image: './file/1675248788DJI_0571.jpg'
+					}
+				}
+			}),
+		});
+
+		// 원시 객체 생성
+		const primitive = new Cesium.Primitive({
+			geometryInstances: new Cesium.GeometryInstance({
+				geometry: polygonGeometry,
+				attributes: {
+					color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.AQUA),
+				},
+			}),
+			appearance: materialAppearance,
+		});
+
+		viewer.scene.primitives.add(primitive);
+
+    </script>
+    </div>
+</body>
+
+</html>

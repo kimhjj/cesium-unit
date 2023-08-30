@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+			left: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script type="text/javascript">
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		const viewer = new Cesium.Viewer("cesiumContainer");
+		const scene = viewer.scene;
+
+		// MaterialAppearance를 사용하여 폴리곤에 이미지 텍스처 적용
+		const materialAppearance = new Cesium.MaterialAppearance({
+			material: new Cesium.Material({
+				//translucent: true,
+				//minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+				fabric: {
+					type: 'Image',
+					uniforms: {
+						image: './file/1675248788DJI_0571.jpg'
+					}
+				}
+			}),
+		});
+
+		const shader = new Cesium.CustomShader({
+			uniforms: {
+				u_colorIndex: {
+					type: Cesium.UniformType.FLOAT,
+					value: 1.0
+				},
+				u_normalMap: {
+					type: Cesium.UniformType.SAMPLER_2D,
+					value: new Cesium.TextureUniform({
+						url: './file/1675248788DJI_0571.jpg'
+					})
+				}
+			},
+			varyings: {
+				v_selectedColor: Cesium.VaryingType.VEC3
+			},
+			vertexShaderText: `
+				void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+					v_selectedColor = mix(vsInput.attributes.color_0, vsInput.attributes.color_1, u_colorIndex);
+					vsOutput.positionMC += 0.1 * vsInput.attributes.normal;
+				}
+			`,
+			fragmentShaderText: `
+				void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+					material.normal = texture(u_normalMap, fsInput.attributes.texCoord_0);
+					material.diffuse = v_selectedColor;
+				}
+			`
+		});
+
+		
+        // tileset
+        const tilesetURL = "http://175.197.92.213:10502/static/ujdataset/bldglod1/tileset.json";
+        const tileset = new Cesium.Cesium3DTileset({
+            url: tilesetURL,
+			customShader : shader
+        });
+
+        const tilesetLayer = viewer.scene.primitives.add(tileset);
+        // tilesetLayer.style = new Cesium.Cesium3DTileStyle({
+        //     color: {
+        //         evaluateColor: (feature, result) => {
+        //             return Cesium.Color.RED;
+        //         }
+        //     }
+        // });
+        
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(129.242039, 35.576655, 8000),
+        });
+
+
+    </script>
+    </div>
+</body>
+
+</html>

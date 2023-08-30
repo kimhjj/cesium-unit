@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+            height: 100%;
+        }
+        #cesiumContainer {
+            position: absolute;
+            top: 0px;
+			left: 300px;
+            width: calc(100% - 300px);
+            height: 100%;
+        }
+        .content {
+            position: absolute;
+            top: 0px;
+			left: 0px;
+            width: 300px;
+            height: 100%;
+        }
+        .content > div {
+            padding: 20px;
+        }
+		.wrap > div {
+			margin: 10px;
+		}
+		.legend {
+			position: absolute;
+			top: 50px;
+			right: 20px;
+			width: 120px;
+			height: 480px;
+			padding: 20px;
+			background-color: rgba(255,255,255,0.7);
+			border-radius: 20px;
+		}
+		.legendValue { 
+			display: inline-block;
+			width: 16px;
+			height: 16px;
+			margin: 5px;
+		}
+		.airplane {
+			position: absolute;
+			top: 600px;
+			right: 20px;
+			width: 120px;
+			height: 200px;
+			padding: 20px;
+			background-color: rgba(255,255,255,0.7);
+			border-radius: 20px;
+		}
+		input[type=range].slider {
+			-webkit-appearance: slider-vertical;
+			writing-mode: bt-lr;
+			width: 8px;
+			height: 100%;
+			padding: 0 5px;
+			margin-top: 15px;
+		}
+		.slider-text {
+			position: relative;
+			display: block;
+			left: 35px;
+		}
+    </style>
+</head>
+
+<body>
+    <div class="content">
+		<div>
+			<div>2023년 06월 25일 18시 h000</div>
+			<div>1.5km 등압면 TMP</div>
+			<div>LDAPS 국지예보모델 (한반도영역)</div>
+		</div>
+		<div style="display: flex;">
+			<div class="wrap" style="width: 50%; background-color: bisque;">
+				<div>
+					<label for="check-all"><input type="checkbox" id="check-all" checked="true" onchange="toggleAll();" />전체</label>
+				</div>
+				<div id="checkboxArea"></div>
+			</div>
+			<div class="wrap" style="width: 50%; background-color: thistle;">
+				<div>높이</div>
+				<div id="rangeArea"></div>
+			</div>
+		</div>
+    </div>
+    <div id="cesiumContainer"></div>
+	<div id="legendArea" class="legend">
+		<div>기온 범례 (℃)</div>
+	</div>
+    <script type="text/javascript">
+        
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYTM3ODhlNC1jOWUxLTRhOTYtYTgwZC1iMDA3OGJiMTQwZDciLCJpZCI6MTI5NDU5LCJpYXQiOjE2ODIwNTc4NjN9.GC-W9QfAFa9rXMh2Ow2rSC5UvLcwtS_qjWJ1v454z1A';
+		
+		let dataGrid = {};
+		const RANGE_TEXT_HEIGHT = 50;
+		const ABSOLUTE_ZERO = 273.15;
+		//const hpaList = [1000, 975, 950, 925, 900, 875, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100, 70, 50];
+		const hpaList = [1000]; //, 975, 950, 925, 900, 800, 700, 600, 500, 50];
+		const legendList = [
+			{max: 999, min: 30, color: '#B71C1C'},
+			{max: 30,  min: 25, color: '#D32F2F'},
+			{max: 25,  min: 20, color: '#F44336'},
+			{max: 20,  min: 15, color: '#EF5350'},
+			{max: 15,  min: 10, color: '#E57373'},
+			{max: 10,  min:  5, color: '#EF9A9A'},
+			{max:  5,  min:  0, color: '#FFCDD2'},
+			{max:  0,  min: -5, color: '#B3E5FC'},
+			{max: -5,  min: -10, color: '#4FC3F7'},
+			{max: -10, min: -20, color: '#29B6F6'},
+			{max: -20, min: -30, color: '#03A9F4'},
+			{max: -30, min: -40, color: '#039BE5'},
+			{max: -40, min: -50, color: '#0288D1'},
+			{max: -50, min: -60, color: '#0277BD'},
+			{max: -60, min: -999, color: '#01579B'},
+		]
+		
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+		hpaList.forEach((hpa) => {
+			const datasource = new Cesium.CustomDataSource(`tmp-${hpa}`);
+			viewer.dataSources.add(datasource);
+		});
+		
+		const getDatasourceByName = (name) => {
+			return viewer.dataSources.getByName(name)[0];
+		}
+		
+		const makeDataGrid = async () => {	
+			const data = await fetch(`./data/l015data.json`);
+			dataGrid = await data.json();
+		}
+		
+		const makeLegend = () => {
+			const html = legendList.reduce((acc, legend) => {
+				return `
+					${acc}
+					<div>
+						<div class="legendValue" style="background-color: ${legend.color}"></div>
+						<span>${legend.min} ~ ${legend.max}</span>
+					</div>
+				`
+			}, '');
+			
+			const parent = document.getElementById("legendArea");
+			parent.innerHTML += html;
+		}
+		
+		const makeCheckbox = () => {
+			const html = hpaList.reduce((acc, hpa) => {
+				return `
+					<div style="margin: 25px 0;">
+						<label>
+							<input type="checkbox" name="checkbox" checked=true 
+								value="tmp-${hpa}" onchange="toggle(this, 'tmp-${hpa}')" />${hpa} hpa
+						</label>
+					</div>
+					${acc}
+				`
+			}, '');
+			
+			const parent = document.getElementById("checkboxArea");
+			parent.innerHTML += html;
+		}
+
+		const makeRange = () => {
+			const startIndex = 0;
+			const html = `
+				<input type="range" class="slider" min="0" max="${hpaList.length - 1}" value="${startIndex}" step="1"
+					style="height: ${(hpaList.length-1) * RANGE_TEXT_HEIGHT}px;" onchange="moveRange(this)" />
+				<span id="rangeText" class="slider-text" style="bottom: ${startIndex * RANGE_TEXT_HEIGHT + 20}px;">
+					${hpaList[startIndex]} hpa
+				</span>
+			`;
+			
+			const parent = document.getElementById("rangeArea");
+			parent.innerHTML += html;
+		}
+		
+		const moveRange = (target) => {
+			const selectedIndex = Number(target.value);
+
+			const element = document.getElementById("rangeText");
+			element.textContent = `${hpaList[selectedIndex]} hpa`;
+			element.style.bottom = `${selectedIndex * RANGE_TEXT_HEIGHT + 20}px`;
+			
+			showOne(selectedIndex);
+		}
+
+		const toggle = (target, name) => {
+			const datasource = getDatasourceByName(name);
+			datasource.show = target.checked;
+			
+			// all
+			let count = 0;
+			document.getElementsByName("checkbox").forEach((element) => {
+				if(element.checked) {
+					count++
+				}
+			});
+			document.getElementById("check-all").checked = count > 0 ? true : false;
+		}
+		
+		const toggleAll = () => {
+			const current = document.getElementById("check-all").checked;
+			document.getElementsByName("checkbox").forEach((element) => {
+				element.checked = current;
+				element.onchange();
+			});
+		}
+		
+		const showOne = (index) => {
+			const value = hpaList[index];
+			document.getElementsByName("checkbox").forEach((element) => {
+				const current = `tmp-${value}` === element.value;
+				element.checked = current;
+				element.onchange();
+			});
+		}
+
+ 		const drawCube = () => {
+			const [startX, startY] = [121.834429, 32.256875];
+			const [gridX, gridY] = [602, 781]; // 고정값
+			const [minX, minY] = [0, 0]; // 나중에 [0,0]으로 변경 필요
+			const [maxX, maxY] = [602, 781]; // 나중에 [602, 781]으로 변경 필요
+			
+			const distance = 1500;
+			const position = Cesium.Cartesian3.fromDegrees(startX, startY);
+
+			hpaList.reduce((prevHpa, hpa) => {
+				const datasource = getDatasourceByName('tmp-'+hpa);
+			
+				for(let y = minY; y < maxY; y++) {
+					let calcY = addY(position, distance*y);
+					
+					for(let x = minX; x < maxX; x++) {
+						let calcX = addX(position, (distance+0)*x);
+						
+						const currentCell = (y * gridX) + (x);
+						
+						const tmp = Number(dataGrid[hpa].tmp[currentCell]) - ABSOLUTE_ZERO;
+						const heightTop = Number(dataGrid[hpa].hgt[currentCell]);
+						const heightBottom = Number(dataGrid[prevHpa]?.hgt[currentCell] || 0);
+						const diffHeight = heightTop - heightBottom;
+						const heightCenter = heightTop - (diffHeight/2);
+						
+						// debug
+						if(y === minY && x === minX) {
+							console.log("prevHpa" , prevHpa, "hpa", hpa, "-->" , tmp, "top", heightTop, "bottom", heightBottom, "diff", diffHeight);
+						}
+			
+						// box graphics의 x,y,높이에 대해서... 나중에 한번 더 계산해보자.....ㅠ.ㅠ
+						datasource.entities.add({
+							// box는 중심 좌표를 기준으로 늘어난다...
+							position: Cesium.Cartesian3.fromDegrees(calcX.lon, calcY.lat, heightCenter),
+							box: {
+								dimensions: new Cesium.Cartesian3(distance, distance, diffHeight),
+								material: getColor(tmp),
+								outline: true,
+								outlineWidth: 1,
+								outlineColor: Cesium.Color.DARK_GREEN,
+							},
+						});
+					}
+				}
+				return hpa;
+			}, null)
+		}
+		
+		const addY = (position, distance) => {
+			let northVector = new Cesium.Cartesian3(0, 0, distance);
+
+			const ellipsoid = viewer.scene.globe.ellipsoid;
+			const cartographic = ellipsoid.cartesianToCartographic(position);
+			const cartographicVector = ellipsoid.cartesianToCartographic(northVector);
+   			const geodesic = new Cesium.EllipsoidGeodesic(cartographic, cartographicVector, ellipsoid);
+			const newPosition = geodesic.interpolateUsingSurfaceDistance(distance);
+			const np = Cesium.Cartesian3.fromRadians(newPosition.longitude, newPosition.latitude, newPosition.height, ellipsoid);
+
+			let newCartographic = Cesium.Cartographic.fromCartesian(np);
+			let newLongitude = Cesium.Math.toDegrees(newCartographic.longitude);
+			let newLatitude = Cesium.Math.toDegrees(newCartographic.latitude);
+			
+			return {lon: newLongitude, lat: newLatitude};
+			// let northVector = new Cesium.Cartesian3(0, 0, distance);
+			// return getPositionByVector(position, northVector, distance);
+		}
+ 
+		const addX = (position, distance) => {
+			let eastVector = new Cesium.Cartesian3(distance * (-1), 0, 0);
+
+			const ellipsoid = viewer.scene.globe.ellipsoid;
+			const cartographic = ellipsoid.cartesianToCartographic(position);
+			const cartographicVector = ellipsoid.cartesianToCartographic(eastVector);
+   			const geodesic = new Cesium.EllipsoidGeodesic(cartographic, cartographicVector, ellipsoid);
+			const newPosition = geodesic.interpolateUsingSurfaceDistance(distance);
+			const np = Cesium.Cartesian3.fromRadians(newPosition.longitude, newPosition.latitude, newPosition.height, ellipsoid);
+
+			let newCartographic = Cesium.Cartographic.fromCartesian(np);
+			let newLongitude = Cesium.Math.toDegrees(newCartographic.longitude);
+			let newLatitude = Cesium.Math.toDegrees(newCartographic.latitude);
+
+			return {lon: newLongitude, lat: newLatitude};
+			// let eastVector = new Cesium.Cartesian3(distance * (-1), 0, 0);
+			// return getPositionByVector(position, eastVector, distance);
+		}
+		
+		const getPositionByVector = (position, vector, distance) => {
+			const ellipsoid = Cesium.Ellipsoid.WGS84;
+
+			const newPosition = Cesium.Cartesian3.add(position, vector, new Cesium.Cartesian3());
+			const newCartographic = ellipsoid.cartesianToCartographic(newPosition);
+
+			// 타원체를 적용하여 새로운 위치 계산
+			const surfacePosition = ellipsoid.scaleToGeodeticSurface(newPosition);
+			const normal = ellipsoid.geodeticSurfaceNormal(surfacePosition);
+			const finalPosition = Cesium.Cartesian3.add(
+				surfacePosition, 
+				Cesium.Cartesian3.multiplyByScalar(normal, distance, new Cesium.Cartesian3()), 
+				new Cesium.Cartesian3()
+			);
+			const finalCartographic = ellipsoid.cartesianToCartographic(finalPosition);
+
+			// let newPosition = Cesium.Cartesian3.add(position, vector, new Cesium.Cartesian3());
+			// //let newCartographic = ellipsoid.cartesianToCartographic(newPosition);
+			// let newCartographic = Cesium.Cartographic.fromCartesian(newPosition);
+			// let newLongitude = Cesium.Math.toDegrees(newCartographic.longitude);
+			// let newLatitude = Cesium.Math.toDegrees(newCartographic.latitude);
+			
+			return {lon: Cesium.Math.toDegrees(finalCartographic.longitude), lat: Cesium.Math.toDegrees(finalCartographic.latitude)};
+		}
+		
+		const getColor = (value) => {
+			const data = legendList.find(legend => {
+				return (legend.min <= value && legend.max > value);
+			})
+			return Cesium.Color.fromCssColorString(data.color).withAlpha(0.7);
+		}
+		
+		// 파일 읽어서 json 만드는 과정. 지금은 만들어진 json 저장해두고 사용중
+		// const makeDataGrid = async () => {
+		// 	const keyList = ["tmp", "hgt"];
+		// 	let keys = [];
+			
+		// 	hpaList.forEach((hpa)=>{
+		// 		keyList.forEach((key)=>{
+		// 			keys.push([key, hpa]);
+		// 		});
+		// 	});
+			
+		// 	const promises = keys.map(async ([key, value]) => {
+		// 		if(!dataGrid[value]) {
+		// 			dataGrid[value] = {};
+		// 		}
+				
+		// 		return await readDataGrid(key, value).then((array)=>[key, value, array]);
+				 
+		// 	});
+			
+		// 	const results = await Promise.all(promises);
+		// 	results.forEach(([key, value, array]) => dataGrid[value][key] = array);
+		// 	debugger
+		// }
+		
+		// const readDataGrid = async (key, height) => {
+		// 	const data = await fetch(`./data/l015${key}${height}.txt`);
+		// 	const text = await data.text();
+		// 	return text.split("\n");
+		// }
+		
+		
+        const flyTo = (target) => {
+            const positionList = {
+                'ko': { 
+                    x: -3692960.9010914317,
+                    y: 5521059.97524565,
+                    z: 3916491.0511800093,
+                    h: 0.2650252972560132,
+                    p: -1.143294535614582,
+                    r: 0.00023341358505302168
+                },
+                'g120': { 
+                    x: -4297592.334571193, 
+					y: 11726991.900281686, 
+					z: 1239175.8912950524,
+                    h: 0.12748782524444469,
+                    p: -1.1839935226361527,
+                    r: 0.001979041395128611
+                }
+            }
+            
+            const position = positionList[target];
+            viewer.camera.flyTo({
+                destination : new Cesium.Cartesian3(position.x, position.y,  position.z),
+                orientation: {heading: position.h, pitch: position.p, roll: position.r}
+            });
+        }
+
+        // load
+		makeLegend();
+		makeCheckbox();
+		makeRange();
+		makeDataGrid().then(()=>{
+			drawCube();
+		});
+
+        flyTo('ko');
+
+    </script>
+    </div>
+</body>
+
+</html>

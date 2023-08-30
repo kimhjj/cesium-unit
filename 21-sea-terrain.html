@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        // Your access token can be found at: https://ion.cesium.com/tokens.
+        // Replace `your_access_token` with your Cesium ion access token.
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzZmNhNDczYS1iMTU1LTQ2M2EtYTcxYi1jNzM0MjUyNzZlOTciLCJpZCI6NTk0ODQsImlhdCI6MTYzMzQyMDI1NX0.kAkqd9V_GFm77HQMqAYESazVGRCmyb0Zh9cTrr9Svdg';
+
+        const viewer = new Cesium.Viewer('cesiumContainer');
+
+        const terrainProvider = Cesium.CesiumTerrainProvider.fromCesiumTerrain({
+            url: Cesium.CesiumTerrainProvider.fromIonAssetId(2056005)
+        });
+
+        viewer.terrainProvider = terrainProvider;
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    </script>
+    </div>
+</body>
+
+</html>
