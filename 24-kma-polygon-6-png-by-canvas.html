@@ -33,8 +33,8 @@
 			height: 100%;
 		}
 
-		.content>div {
-			padding: 20px;
+		.content > div {
+			padding: 10px 20px;
 		}
 
 		.wrap>div {
@@ -79,6 +79,14 @@
 			margin-top: 15px;
 		}
 
+		.title { 
+			background-color: antiquewhite;
+			padding: 3px;
+		}
+		.range {
+			margin-top: 10px;
+			margin-bottom: 20px;
+		}
 		.slider-text {
 			position: relative;
 			display: block;
@@ -92,18 +100,20 @@
 		<div>
 			<div>2023년 06월 25일 18시 h000</div>
 			<div>1.5km 등압면</div>
+		</div>
+		<div>
+			<p align="center" class="title">표출 속성 제어</p>
 			<div>
 				<label><input type="radio" name="element" value="TMP" />기온</label>
 				<label><input type="radio" name="element" value="WSD" />풍속</label>
+				<label><input type="radio" name="element" value="JET" />제트기류</label>
 			</div>
 			<div>
-				<label><input type="radio" name="element" value="JET" />제트기류</label>
-				<label><input type="radio" name="element" value="UVW" checked="checked" />바람</label>
-				<!-- document.querySelectorAll('input[name="element"]:checked')[0].value -->
+				<label><input type="radio" name="element" value="UVW" />바람</label>
+				<label><input type="radio" name="element" value="UVW" checked="checked" />바람길</label>
 			</div>
 			<div>
 				<label><input type="checkbox" id="isTrans" checked="checked" />투명도 적용</label>
-				<!-- document.getElementById("isTrans").checked -->
 			</div>
 		</div>
 		<!-- <div style="display: flex;">
@@ -119,30 +129,28 @@
 			</div>
 		</div> -->
 		<div>
+			<p align="center" class="title">표출 영역 제어</p>
 			<label for="label-range-x">longitude range:</label>
-			<input type="text" id="label-range-x" readonly style="border:0; color:#f6931f; font-weight:bold;">
-			<div id="slider-range-x"></div>
-
+			<input type="text" id="label-range-x" readonly size="12" style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-x" class="range"></div>
 			<label for="label-range-y">latitude range:</label>
-			<input type="text" id="label-range-y" readonly style="border:0; color:#f6931f; font-weight:bold;">
-			<div id="slider-range-y"></div>
-
+			<input type="text" id="label-range-y" readonly size="12" style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-y" class="range"></div>
 			<label for="label-range-p">pressure range:</label>
-			<input type="text" id="label-range-p" readonly style="border:0; color:#f6931f; font-weight:bold;">
-			<br />
+			<input type="text" id="label-range-p" readonly size="12" style="border:0; color:#f6931f; font-weight:bold;">
 			<label for="label-list-p">pressures:</label>
 			<input type="text" id="label-list-p" readonly style="border:0; color:#f6931f; font-weight:bold;">
-			<div id="slider-range-p"></div>
-
+			<div id="slider-range-p" class="range"></div>
 			<label for="label-range-scale">height scale:</label>
-			<input type="text" id="label-range-scale" readonly style="border:0; color:#f6931f; font-weight:bold;">
-			<div id="slider-range-scale"></div>
+			<input type="text" id="label-range-scale" readonly size="12" style="border:0; color:#f6931f; font-weight:bold;">
+			<div id="slider-range-scale" class="range"></div>
 		</div>
 		<div>
+			<p align="center" class="title">RGB 값 읽기</p>
 			<div>
-				<label>픽셀 x <input type="text" id="color-x" size="3" value="0" /></label> 0~601
+				<label>픽셀 x <input type="text" id="color-x" size="3" value="100" /></label> 0~601
 				<br />
-				<label>픽셀 y <input type="text" id="color-y" size="3" value="0" /></label> 0~780
+				<label>픽셀 y <input type="text" id="color-y" size="3" value="350" /></label> 0~780
 				<br />
 				<label>고도 h 
 					<select id="color-h"></select>
@@ -178,9 +186,20 @@
 		}
 
 		function moveXY(sx, sy, height, movex, movey) {
-			const eastGeodesic = new Cesium.EllipsoidGeodesic(Cesium.Cartographic.fromDegrees(sx, sy, height), Cesium.Cartographic.fromDegrees(sx + 0.1, sy, height))
+			// new Cesium.EllipsoidGeodesic(start, end,  ellipsoid) 
+			const eastGeodesic = new Cesium.EllipsoidGeodesic(
+				Cesium.Cartographic.fromDegrees(sx, sy, height), 
+				Cesium.Cartographic.fromDegrees(sx + 0.1, sy, height)
+			)
 			const eastPoint = eastGeodesic.interpolateUsingSurfaceDistance(movex)
-			const northGeodesic = new Cesium.EllipsoidGeodesic(eastPoint, Cesium.Cartographic.fromDegrees(eastPoint.longitude * Cesium.Math.DEGREES_PER_RADIAN, eastPoint.latitude * Cesium.Math.DEGREES_PER_RADIAN + 0.1, height))
+			const northGeodesic = new Cesium.EllipsoidGeodesic(
+				eastPoint, 
+				Cesium.Cartographic.fromDegrees(
+					eastPoint.longitude * Cesium.Math.DEGREES_PER_RADIAN, 
+					eastPoint.latitude * Cesium.Math.DEGREES_PER_RADIAN + 0.1, 
+					height
+				)
+			)
 			const eastNorthPoint = northGeodesic.interpolateUsingSurfaceDistance(movey);
 			return eastNorthPoint;
 		}
@@ -202,16 +221,22 @@
 			start = Cesium.Cartographic.fromRadians(rangedLongitude[0], rangedLatitude[0], minHeight);
 			end = Cesium.Cartographic.fromRadians(rangedLongitude[1], rangedLatitude[1], minHeight);
 
+			// Entity > polygon > hierarchy 좌표 수정 필요함
+			const startlon = Cesium.Math.toDegrees(start.longitude);
+			const startlat = Cesium.Math.toDegrees(start.latitude);
+			const endlon = Cesium.Math.toDegrees(end.longitude);
+			const endlat = Cesium.Math.toDegrees(end.latitude);
+
 			return new Cesium.Entity({
 				// name: `Pres ${pres}`,
 				show: visible,
 				polygon: {
 					arcType: Cesium.ArcType.RHUMB,
 					hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights([
-						start.longitude * Cesium.Math.DEGREES_PER_RADIAN, start.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
-						end.longitude * Cesium.Math.DEGREES_PER_RADIAN, start.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
-						end.longitude * Cesium.Math.DEGREES_PER_RADIAN, end.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
-						start.longitude * Cesium.Math.DEGREES_PER_RADIAN, end.latitude * Cesium.Math.DEGREES_PER_RADIAN, minHeight,
+						startlon, startlat, minHeight,
+						endlon, startlat, minHeight,
+						endlon, endlat, minHeight,
+						startlon, endlat, minHeight,
 					]),
 					height: minHeight,
 					textureCoordinates: {
@@ -303,9 +328,12 @@
 			const cy = 781;
 
 			const viewer = new Cesium.Viewer('cesiumContainer');
+			//viewer.terrainProvider = Cesium.createWorldTerrain();
 			viewer.scene.globe.depthTestAgainstTerrain = true;
 			const datasource = new Cesium.CustomDataSource("PNG");
        	 	viewer.dataSources.add(datasource);
+			const datasourceStream = new Cesium.CustomDataSource("STREAM");
+       	 	viewer.dataSources.add(datasourceStream);
 
 			const position = Cesium.Cartesian3.fromDegrees(
 				121.06,
@@ -322,6 +350,7 @@
 			);
 
 			let canvasMap = {}
+			let jsonMap = {}
 
 			// ui
 			let wRange = [0, 1];	// 전체 지역 중 표시할 범위
@@ -345,13 +374,23 @@
 			canvas.forEach(c => canvasMap[c.id] = c);
 			printTimeElapse('generate canvas by pres complete');
 
-			// load images
-			loadImage();
-			printTimeElapse('load images complete');
 
-			// generate polygons
-			createPolygons();
-			printTimeElapse('generate polygons complete');
+			const currentElement = document.querySelectorAll('input[name="element"]:checked')[0].value;
+			if(currentElement === "UVW") {
+				await loadImage();
+				printTimeElapse('load images complete');
+
+				await loadStream();
+				printTimeElapse('load stream complete');
+				
+				// TODO: draw stream
+			} else {
+				await loadImage();
+				printTimeElapse('load images complete');
+
+				createPolygons();
+				printTimeElapse('generate polygons complete');
+			}
 
 			// after loading
 			viewer.zoomTo(datasource.entities);
@@ -359,13 +398,50 @@
 
 			// change attribute
 			async function updateAttribute() {
-				await loadImage();
-				createPolygons();
+				const currentElement = document.querySelectorAll('input[name="element"]:checked')[0].value;
+				if(currentElement === "UVW") {
+					await loadStream();
+					// TODO: draw stream
+				} else {
+					await loadImage();
+					createPolygons();
+				}
 			}
 
 			// jquery ui
 			function updateRange(wRange, hRange, pRange) {
 				createPolygons();
+			}
+
+			async function loadStream() {
+				// 일단 여기서 다 개발 ㅎㅎ;
+
+				//  분포도 off, TODO: 분포도에서는 stream off 해야함
+				datasource.entities._entities._array.forEach((e)=>{
+					e.show = false;
+				});
+				
+				// load json
+				await loadJSON();
+				printTimeElapse('load json complete');
+				
+				drawLine();
+			}
+
+			async function loadJSON() {
+				jsonMap = {};
+
+				const element = "UVW";
+				const promises = Pressures.map(async (pres, i) => {
+					const filename = `./json/${element}_${i}_l015_v070_erlo_pres_h000.2023062500.json`;
+					const response = await fetch(filename);
+					if(response.ok) {
+						jsonMap[pres] = await response.json();
+					} else {
+						console.error(`Failed to load ${fileName}.`);
+					}
+				});
+				await Promise.all(promises);
 			}
 
 			// load png images
@@ -427,6 +503,101 @@
 				const g = pixelData[1];
 				const b = pixelData[2];
 				return [r, g, b];
+			}
+
+			function readUWVelocity(pixelX, pixelY, pixelZ) {
+				const [r, g, b] = readPNGValue(pixelX, pixelY, pixelZ);
+				const rangeOfValue = jsonMap[pixelZ].features[0].properties.value;
+
+				const {min:rmin, max:rmax} = rangeOfValue.r;
+				const {min:gmin, max:gmax} = rangeOfValue.g;
+				const {min:bmin, max:bmax} = rangeOfValue.b;
+
+				const u = r * (rmax - rmin) / 255 + rmin;	// 189: 35.175526 ---> 189: 35.12813403185676
+				const v = g * (gmax - gmin) / 255 + gmin;	// 130: 1.654862  ---> 129: 1.5049083597519815
+				const w = b * (bmax - bmin) / 255 + bmin;	// 110: 0.004244  ---> 110: 0.004136141608743316
+
+				return {u, v, w}
+			}
+
+			function drawLine() {
+				// ---------------------------------------
+				// 대상 지역: 100 * 350 , level: 4, 200hpa
+				// 해당하는 좌표와
+				// 해당하는 변환 값을 구함
+				// uvw를 활용해서 시작점과 끝점의 좌표를 구함
+				// 선을 그린다.
+				// 위치로 이동한다.
+				// ---------------------------------------
+
+				// sx~ex, sy~ey를 cx, cy로 나눔. 그리고 level4의 height 값 계산
+				// get LonLat, get Cartesian
+
+				// 0. 대상
+				const pixels = [];
+
+				for(let i=0; i<601; i=i+100) {
+					for(let j=0; j<781; j=j+100) {
+						pixels.push([i, j, 200]);
+					}
+				}
+
+				pixels.forEach(([pixelX, pixelY, pres]) => {
+
+					// 1. png를 읽어서 실제 값 조회
+					const {u, v, w} = readUWVelocity(pixelX, pixelY, pres);
+
+					// 2. transMatrix
+					// 전체 영역의 중심점을 계산
+					const polygonCoordinates = [];
+					jsonMap[pres].features[0].geometry.coordinates[0].forEach((lonlat)=>{
+						polygonCoordinates.push(Cesium.Cartesian3.fromDegrees(lonlat[0], lonlat[1], lonlat[2]));
+					});
+					const center = Cesium.BoundingSphere.fromPoints(polygonCoordinates, new Cesium.Cartesian3());
+
+					// 중심점 이동에 필요한 변환 행렬 생성
+					const translationMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+					const inverseMatrix = Cesium.Matrix4.inverse(translationMatrix, new Cesium.Matrix4());
+
+					// 새로운 중심점 위치 (Cartesian3로 가정)
+					const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
+					const FACTOR = 10 * speed;
+					const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
+					
+					// 3. 시작점 + 끝점 좌표 계산
+					// moveXY의 return 값은 Cartographic
+					// Cartographic의 장점: 경위도 및 고도 정보를 정확하게 다룸 (gpt)
+					const startCarto = moveXY(sx, sy, MinHeightByPressure[pres], 0, 0);
+					const endCarto = moveXY(sx, sy, MinHeightByPressure[pres], dx * cx, dy * cy);
+					const [lonLength, latlength] = [endCarto.longitude - startCarto.longitude, endCarto.latitude - startCarto.latitude];
+					
+					// 시작점
+					const [startX, startY] = [pixelX/cx, pixelY/cy]; 
+					const minHeight = MinHeightByPressure[pres] * heightScale;
+					const startCartooooo = Cesium.Cartographic.fromRadians(startCarto.longitude + lonLength * startX, startCarto.latitude + latlength * startY, minHeight);
+					
+					// a: 시작, b: 종료
+					const aWC = Cesium.Ellipsoid.WGS84.cartographicToCartesian(startCartooooo);
+					const aLC = Cesium.Matrix4.multiplyByPointAsVector(inverseMatrix, aWC, new Cesium.Cartesian3());
+					const bLC = Cesium.Cartesian3.add(aLC, directionVector, new Cesium.Cartesian3());
+					const bWC = Cesium.Matrix4.multiplyByPointAsVector(translationMatrix, bLC, new Cesium.Cartesian3());
+					const startCartesian = aWC;
+					const endCartesian = bWC
+
+					// 4. 도형 그리기
+					datasourceStream.entities.add(
+						new Cesium.Entity({
+							polyline: {
+								positions: [startCartesian, endCartesian],
+								width: 2,
+								material: Cesium.Color.RED
+							}
+						})
+					);
+				});
+
+				// 5. 위치로 이동
+				viewer.zoomTo(datasourceStream.entities);
 			}
 
 			// jquery ui slider
@@ -492,10 +663,14 @@
 				});
 				// color picker
 				const selectboxAltitude = document.getElementById("color-h");
+				const selectedIndex = 4;
 				Pressures.forEach((pres, i) => {
 					const option = document.createElement("option");
 					option.value = pres;
 					option.innerText = i + "레벨_hpa" + pres;
+					if(i===selectedIndex) {
+						option.selected = true;
+					}
 					selectboxAltitude.append(option);
 				});
 				document.getElementById("color-button").addEventListener('click', () => {
