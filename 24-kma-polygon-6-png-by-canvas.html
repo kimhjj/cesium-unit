@@ -527,9 +527,18 @@
 				const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 				const pixelX = Math.floor((cartographic.longitude - _startPosition.longitude) / (_endPosition.longitude - _startPosition.longitude) * cx);
 				const pixelY = Math.floor((cartographic.latitude - _startPosition.latitude) / (_endPosition.latitude - _startPosition.latitude) * cy);
-				// TODO
-				const pres = 50;
-				return [pixelX, pixelY, pres];
+				 
+				let pres = 0;
+				const targetValue = cartographic.height;
+				for(const key in MaxHeightByPressure) {
+					const height = Number(MaxHeightByPressure[key]);
+					if(height < targetValue) {
+						pres = key;
+						break;
+					}
+				}
+
+				return [pixelX, pixelY, pres, targetValue];
 			}
             
 			// 픽셀을 WC 좌표로 변환
@@ -542,7 +551,7 @@
 				return Cesium.Ellipsoid.WGS84.cartographicToCartesian(cartographic, new Cesium.Cartesian3());
 			}
 
-			function getCenterByCoords(coordinates, pres) {
+			function getCenterByCoords(coordinates) {
 				const polygonCoordinates = [];
 				coordinates.forEach((lonlat)=>{
 					polygonCoordinates.push(Cesium.Cartesian3.fromDegrees(lonlat[0], lonlat[1], lonlat[2]));
@@ -551,26 +560,24 @@
 				return center;
 			}
 
-			function recursiveGetStreamWC(pixelX, pixelY, pres, count, result) {
-				count++;
-				if (pixelX < 0 && pixelX > cx && pixelY < 0 && pixelY > cy || count > 10) {
+			function recursiveDrawStreamWC(pixelX, pixelY, pres, height, count, result) {
+				if (pixelX < 0 && pixelX > cx && pixelY < 0 && pixelY > cy || pres == 0 || count > 20) {
 					return result;
 				}
-
-				const [aWC, bWC] = getStreamWC(pixelX, pixelY, pres);
-				result.push([aWC, bWC]);
-
-				// 스피드, uvw 값을 알고 제어 해야함...
-
-				const [nextX, nextY, nextPres] = getPixelByCartesian(bWC);
-				return recursiveGetStreamWC(nextX, nextY, nextPres, count, result);
+				
+				const {u,v,w,speed,start,end} = getStreamWC(pixelX, pixelY, pres, height);
+				result.push([start, end]);
+				
+				// next
+				const [nextX, nextY, nextPres, nextHeight] = getPixelByCartesian(end);
+				return recursiveDrawStreamWC(nextX, nextY, nextPres, nextHeight, count + 1, result);
 			}
 
-			function getStreamWC(pixelX, pixelY, pres) {
+			function getStreamWC(pixelX, pixelY, pres, height) {
 				// 1. png를 읽어서 실제 값 조회
 				const {u, v, w} = readUVVelocity(pixelX, pixelY, pres);
 				const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
-				const FACTOR = 30 * speed;
+				const FACTOR = 100;	// * speed
 				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
 
 				// 2. WC <-> LC 변환을 위한 행렬 생성
@@ -580,49 +587,56 @@
 				const inverseMatrix = Cesium.Matrix4.inverse(translationMatrix, new Cesium.Matrix4());
 				
 				// 3. 시작점(a), 종료점(b)
-				const minHeight = MinHeightByPressure[pres] * heightScale;
-				const aWC = getCartesianByPixel(pixelX, pixelY, minHeight);
+				const aWC = getCartesianByPixel(pixelX, pixelY, height);
 				const aLC = Cesium.Matrix4.multiplyByPointAsVector(inverseMatrix, aWC, new Cesium.Cartesian3());
 				const bLC = Cesium.Cartesian3.add(aLC, directionVector, new Cesium.Cartesian3());
 				const bWC = Cesium.Matrix4.multiplyByPointAsVector(translationMatrix, bLC, new Cesium.Cartesian3());
-				return [aWC, bWC];
+
+				return {
+					u, v, w,
+					speed: speed,
+					start: aWC, 
+					end: bWC
+				};
 			}
 
 			function drawLine() {
 
-				// 0. 대상 위치
+				// 임의의 위치
 				const pixels = [];
 				for(let i=0; i<601; i=i+100) {
 					for(let j=0; j<781; j=j+100) {
-						pixels.push([i, j, 200]);
+						pixels.push([i, j, 500]);
 					}
 				}
 
 				pixels.forEach(([pixelX, pixelY, pres]) => {
 					const color = Cesium.Color.fromRandom();
-					
-					// TODO 그림 그리기를 저기서 해야함.. get을 draw로 바꾸고,
-					const array = recursiveGetStreamWC(pixelX, pixelY, pres, 0, []);
-
-					array.forEach((points, i) => {
+					const result = recursiveDrawStreamWC(pixelX, pixelY, pres, MinHeightByPressure[pres], 0, []);
+					result.reduce((acc, curr, i) => {
+						const start = acc? acc[1] : curr[0];
+						const end = curr[1];
 						datasourceStream.entities.add(
 							new Cesium.Entity({
 								// availability: <TimeIntervalCollection>,
 								polyline: {
-									positions: points,
-									width: 5,
+									positions: [start, end],
+									width: 10,
 									arcType: Cesium.ArcType.NONE,
 									material: new Cesium.PolylineArrowMaterialProperty(
-										Cesium.Color.fromAlpha(color, i * 0.2)
+										Cesium.Color.fromAlpha(color, 1/result.length * i)
 									),
 								}
 							})
 						);
-					});
+						return curr;
+					}, null);
 				});
-
-				// 5. 위치로 이동
-				viewer.zoomTo(datasourceStream.entities);
+				
+				viewer.camera.flyTo({
+					destination: new Cesium.Cartesian3(-2909946.948014045, 4116503.8643672476, 3955358.7367969714),
+					orientation: {heading: 6.27724075935652,pitch: -0.1832401856765058,roll: 6.282072766364438}
+				});
 			}
 
 			// jquery ui slider
