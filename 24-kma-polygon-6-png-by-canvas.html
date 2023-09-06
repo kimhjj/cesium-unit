@@ -427,7 +427,13 @@
 				await loadJSON();
 				printTimeElapse('load json complete');
 				
-				drawLine();
+				drawLine(); 
+
+				// 위치 이동
+				viewer.camera.flyTo({
+					destination: new Cesium.Cartesian3(-2909946.948014045, 4116503.8643672476, 3955358.7367969714),
+					orientation: {heading: 6.27724075935652,pitch: -0.1832401856765058,roll: 6.282072766364438}
+				});
 			}
 
 			async function loadJSON() {
@@ -560,24 +566,11 @@
 				return center;
 			}
 
-			function recursiveDrawStreamWC(pixelX, pixelY, pres, height, count, result) {
-				if (pixelX < 0 && pixelX > cx && pixelY < 0 && pixelY > cy || pres == 0 || count > 20) {
-					return result;
-				}
-				
-				const {u,v,w,speed,start,end} = getStreamWC(pixelX, pixelY, pres, height);
-				result.push([start, end]);
-				
-				// next
-				const [nextX, nextY, nextPres, nextHeight] = getPixelByCartesian(end);
-				return recursiveDrawStreamWC(nextX, nextY, nextPres, nextHeight, count + 1, result);
-			}
-
 			function getStreamWC(pixelX, pixelY, pres, height) {
 				// 1. png를 읽어서 실제 값 조회
 				const {u, v, w} = readUVVelocity(pixelX, pixelY, pres);
 				const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
-				const FACTOR = 100;	// * speed
+				const FACTOR = 50 * speed;
 				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
 
 				// 2. WC <-> LC 변환을 위한 행렬 생성
@@ -604,39 +597,71 @@
 
 				// 임의의 위치
 				const pixels = [];
-				for(let i=0; i<601; i=i+100) {
-					for(let j=0; j<781; j=j+100) {
+				for(let i=0; i<601; i=i+50) {
+					for(let j=0; j<781; j=j+50) {
 						pixels.push([i, j, 500]);
 					}
 				}
 
 				pixels.forEach(([pixelX, pixelY, pres]) => {
+					let result = [];
+					let height = MinHeightByPressure[pres];
+					let px = pixelX;
+					let py = pixelY;
+					let p = pres;
+
+					// 포인트 위치 계산
+					for(let i=0; i<20; i++) {
+						if (px < 0 && px > cx && py < 0 && py > cy || p === 0) {
+							break;
+						}
+						
+						const {u,v,w,speed,start,end} = getStreamWC(px, py, p, height);
+						result.push([start, end]);
+						
+						// next
+						const [nextX, nextY, nextPres, nextHeight] = getPixelByCartesian(end);
+						px = nextX;
+						py = nextY;
+						p = nextPres;
+						height = nextHeight;
+					}
+
+					// 라인 그리기
 					const color = Cesium.Color.fromRandom();
-					const result = recursiveDrawStreamWC(pixelX, pixelY, pres, MinHeightByPressure[pres], 0, []);
 					result.reduce((acc, curr, i) => {
 						const start = acc? acc[1] : curr[0];
 						const end = curr[1];
-						datasourceStream.entities.add(
-							new Cesium.Entity({
-								// availability: <TimeIntervalCollection>,
-								polyline: {
-									positions: [start, end],
-									width: 10,
-									arcType: Cesium.ArcType.NONE,
-									material: new Cesium.PolylineArrowMaterialProperty(
-										Cesium.Color.fromAlpha(color, 1/result.length * i)
-									),
-								}
-							})
-						);
+						const last = (i === result.length -1);
+
+						let width, material;
+						if(last) {
+							width = 10;
+							material = new Cesium.PolylineArrowMaterialProperty(
+								Cesium.Color.fromAlpha(color, 1/result.length * i)
+							);
+						} else {
+							width = 3;
+							material = Cesium.Color.fromAlpha(color, 1/result.length * i);
+						}
+
+						drawPolyline(datasourceStream, start, end, width, material);
 						return curr;
 					}, null);
 				});
-				
-				viewer.camera.flyTo({
-					destination: new Cesium.Cartesian3(-2909946.948014045, 4116503.8643672476, 3955358.7367969714),
-					orientation: {heading: 6.27724075935652,pitch: -0.1832401856765058,roll: 6.282072766364438}
-				});
+			}
+
+			function drawPolyline(datasource, start, end, width, material) {
+				datasource.entities.add(
+					new Cesium.Entity({
+						polyline: {
+							positions: [start, end],
+							width: width,
+							arcType: Cesium.ArcType.NONE,
+							material: material,
+						}
+					})
+				);
 			}
 
 			// jquery ui slider
