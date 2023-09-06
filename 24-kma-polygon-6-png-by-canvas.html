@@ -185,6 +185,22 @@
 			}
 		}
 
+		function cartographicToDegree(cartographic) {
+			const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+			const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+			return [longitude, latitude];
+		}
+
+		function cartographicToCartesian(cartographic) {
+			// cartesian 
+			return Cesium.Ellipsoid.WGS84.cartographicToCartesian(cartographic, new Cesium.Cartesian3());
+		}
+
+		function cartesianToCartographic(cartesian) {
+			// cartographic
+			return Cesium.Cartographic.fromCartesian(cartesian);
+		}
+
 		function moveXY(sx, sy, height, movex, movey) {
 			// new Cesium.EllipsoidGeodesic(start, end,  ellipsoid) 
 			const eastGeodesic = new Cesium.EllipsoidGeodesic(
@@ -328,6 +344,16 @@
 			const cy = 781;
 			const _startPosition = moveXY(sx, sy, 0, 0, 0);
 			const _endPosition = moveXY(sx, sy, 0, dx * cx, dy * cy);
+			const _startPositionDeg = cartographicToDegree(_startPosition);
+			const _endPositionDeg = cartographicToDegree(_endPosition);
+			const _center = Cesium.Cartesian3.fromDegrees(
+				(_startPositionDeg[0] + _endPositionDeg[0]) / 2, 
+				(_startPositionDeg[1] + _endPositionDeg[1]) / 2, 
+				(MaxHeightByPressure[50] + MaxHeightByPressure[1000]) / 2
+			);
+			const _transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(_center);
+			const _inverseMatrix = Cesium.Matrix4.inverse(_transformMatrix, new Cesium.Matrix4());
+			
 
 			const viewer = new Cesium.Viewer('cesiumContainer');
 			//viewer.terrainProvider = Cesium.createWorldTerrain();
@@ -527,9 +553,21 @@
 
 				return {u, v, w}
 			}
+			
+			function worldToLocal(cartesian) {
+				// world -> local
+				return Cesium.Matrix4.multiplyByPointAsVector(_inverseMatrix, cartesian, new Cesium.Cartesian3());
+			}
 
-			// WC 좌표를 픽셀로 변환
-			function getPixelByCartesian(cartesian) {
+			function localToWorld(cartesian) {
+				// local -> world
+				return Cesium.Matrix4.multiplyByPointAsVector(_transformMatrix, cartesian, new Cesium.Cartesian3());
+			}
+
+			// LC 좌표를 픽셀로 변환
+			function getPixelByCartesian(cartesianLC) {
+				// TODO 정리
+				const cartesian = localToWorld(cartesianLC);
 				const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 				const pixelX = Math.floor((cartographic.longitude - _startPosition.longitude) / (_endPosition.longitude - _startPosition.longitude) * cx);
 				const pixelY = Math.floor((cartographic.latitude - _startPosition.latitude) / (_endPosition.latitude - _startPosition.latitude) * cy);
@@ -547,26 +585,6 @@
 				return [pixelX, pixelY, pres, targetValue];
 			}
 
-			function cartographicToCartesian(cartographic) {
-				// cartesian 
-				return Cesium.Ellipsoid.WGS84.cartographicToCartesian(cartographic, new Cesium.Cartesian3());
-			}
-
-			function cartesianToCartographic(cartesian) {
-				// cartographic
-				return Cesium.Cartographic.fromCartesian(cartesian);
-			}
- 
-			// 픽셀을  변환
-			function getCartographicByPixel(pixelX, pixelY, height) {
-				const cartographic = Cesium.Cartographic.fromRadians(
-					_startPosition.longitude + (_endPosition.longitude - _startPosition.longitude) * (pixelX / cx), 
-					_startPosition.latitude  + (_endPosition.latitude - _startPosition.latitude) * (pixelY / cy), 
-					height
-				);
-				return cartographic;
-			}
-
 			// 픽셀을 WC 좌표로 변환
 			function getCartesianByPixel(pixelX, pixelY, height) {
 				const cartographic = Cesium.Cartographic.fromRadians(
@@ -577,16 +595,7 @@
 				return cartographicToCartesian(cartographic);
 			}
 
-			function getCenterByCoords(coordinates) {
-				const polygonCoordinates = [];
-				coordinates.forEach((lonlat)=>{
-					polygonCoordinates.push(Cesium.Cartesian3.fromDegrees(lonlat[0], lonlat[1], lonlat[2]));
-				});
-				const center = Cesium.BoundingSphere.fromPoints(polygonCoordinates, new Cesium.Cartesian3());
-				return center;
-			}
-
-			function getStreamWC(pixelX, pixelY, pres, height) {
+			function getStreamInfo(pixelX, pixelY, pres, height) {
 				// 1. png를 읽어서 실제 값 조회
 				const {u, v, w} = readUVVelocity(pixelX, pixelY, pres);
 				const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
@@ -594,27 +603,15 @@
 				//const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
 				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, 0);
 
-				// 2. WC <-> LC 변환을 위한 행렬 생성
-				const [minx, miny, h0, maxx, maxy, h1] = jsonMap[pres].features[0].bbox;
-				const centerLonDeg = (maxx + minx) / 2;
-				const centerLatDeg = (maxy + miny) / 2;
-				const centerAlt = (20841 + 60) / 2;
-				const center = Cesium.Cartesian3.fromDegrees(centerLonDeg, centerLatDeg, centerAlt);
-				const transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(center);
-				const inverseMatrix = Cesium.Matrix4.inverse(transformMatrix, new Cesium.Matrix4());
-				
-				// 3. 시작점(a), 종료점(b)
-				const aCarto = getCartographicByPixel(pixelX, pixelY, height);
-				const aWC = getCartesianByPixel(pixelX, pixelY, height);
-				const aLC = Cesium.Matrix4.multiplyByPointAsVector(inverseMatrix, aWC, new Cesium.Cartesian3());
-				const bLC = Cesium.Cartesian3.add(aLC, directionVector, new Cesium.Cartesian3()); 
-				const bWC = Cesium.Matrix4.multiplyByPointAsVector(transformMatrix, bLC, new Cesium.Cartesian3());
+				// 2. 시작점(a), 종료점(b), local 좌표계로만
+				const startWC = getCartesianByPixel(pixelX, pixelY, height);
+				const startLC = worldToLocal(startWC);
+				const endLC = Cesium.Cartesian3.add(startLC, directionVector, new Cesium.Cartesian3()); 
+				const endWC = localToWorld(endLC);
 
 				return {
-					u, v, w,
-					speed: speed,
-					start: aWC, 
-					end: bWC
+					u, v, w, speed, 
+					startLC, endLC
 				};
 			}
 
@@ -640,11 +637,11 @@
 						if (px < 0 && px > cx && py < 0 && py > cy || p === 0) {
 							break;
 						}
-						const {u,v,w,speed,start,end} = getStreamWC(px, py, p, height);
-						result.push([start, end]);
+						const {u,v,w,speed,startLC,endLC} = getStreamInfo(px, py, p, height);
+						result.push([startLC, endLC]);
 						
 						// next
-						const [nextX, nextY, nextPres, nextHeight] = getPixelByCartesian(end);
+						const [nextX, nextY, nextPres, nextHeight] = getPixelByCartesian(endLC);
 						px = nextX;
 						py = nextY;
 						p = nextPres;
@@ -654,8 +651,10 @@
 					// 라인 그리기
 					const color = Cesium.Color.fromRandom();
 					result.reduce((acc, curr, i) => {
-						const start = acc? acc[1] : curr[0];
-						const end = curr[1];
+						const startLC = acc? acc[1] : curr[0];
+						const startWC = localToWorld(startLC);
+						const endLC = curr[1];
+						const endWC = localToWorld(endLC);
 						const last = (i === result.length -1);
 
 						let width, material;
@@ -669,7 +668,7 @@
 							material = Cesium.Color.fromAlpha(color, 1/result.length * i);
 						}
 
-						drawPolyline(datasourceStream, start, end, width, material);
+						drawPolyline(datasourceStream, startWC, endWC, width, material);
 						return curr;
 					}, null);
 				});
