@@ -533,11 +533,11 @@
 				const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
 				const pixelX = Math.floor((cartographic.longitude - _startPosition.longitude) / (_endPosition.longitude - _startPosition.longitude) * cx);
 				const pixelY = Math.floor((cartographic.latitude - _startPosition.latitude) / (_endPosition.latitude - _startPosition.latitude) * cy);
-				 
+				
 				let pres = 0;
 				const targetValue = cartographic.height;
-				for(const key in MaxHeightByPressure) {
-					const height = Number(MaxHeightByPressure[key]);
+				for(const key in MinHeightByPressure) {
+					const height = Number(MinHeightByPressure[key]);
 					if(height < targetValue) {
 						pres = key;
 						break;
@@ -546,7 +546,27 @@
 
 				return [pixelX, pixelY, pres, targetValue];
 			}
-            
+
+			function cartographicToCartesian(cartographic) {
+				// cartesian 
+				return Cesium.Ellipsoid.WGS84.cartographicToCartesian(cartographic, new Cesium.Cartesian3());
+			}
+
+			function cartesianToCartographic(cartesian) {
+				// cartographic
+				return Cesium.Cartographic.fromCartesian(cartesian);
+			}
+ 
+			// 픽셀을  변환
+			function getCartographicByPixel(pixelX, pixelY, height) {
+				const cartographic = Cesium.Cartographic.fromRadians(
+					_startPosition.longitude + (_endPosition.longitude - _startPosition.longitude) * (pixelX / cx), 
+					_startPosition.latitude  + (_endPosition.latitude - _startPosition.latitude) * (pixelY / cy), 
+					height
+				);
+				return cartographic;
+			}
+
 			// 픽셀을 WC 좌표로 변환
 			function getCartesianByPixel(pixelX, pixelY, height) {
 				const cartographic = Cesium.Cartographic.fromRadians(
@@ -554,7 +574,7 @@
 					_startPosition.latitude  + (_endPosition.latitude - _startPosition.latitude) * (pixelY / cy), 
 					height
 				);
-				return Cesium.Ellipsoid.WGS84.cartographicToCartesian(cartographic, new Cesium.Cartesian3());
+				return cartographicToCartesian(cartographic);
 			}
 
 			function getCenterByCoords(coordinates) {
@@ -571,19 +591,24 @@
 				const {u, v, w} = readUVVelocity(pixelX, pixelY, pres);
 				const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
 				const FACTOR = 50 * speed;
-				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
+				//const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
+				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, 0);
 
 				// 2. WC <-> LC 변환을 위한 행렬 생성
-				const coords = jsonMap[pres].features[0].geometry.coordinates[0];
-				const center = getCenterByCoords(coords);
-				const translationMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(center);
-				const inverseMatrix = Cesium.Matrix4.inverse(translationMatrix, new Cesium.Matrix4());
+				const [minx, miny, h0, maxx, maxy, h1] = jsonMap[pres].features[0].bbox;
+				const centerLonDeg = (maxx + minx) / 2;
+				const centerLatDeg = (maxy + miny) / 2;
+				const centerAlt = (20841 + 60) / 2;
+				const center = Cesium.Cartesian3.fromDegrees(centerLonDeg, centerLatDeg, centerAlt);
+				const transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+				const inverseMatrix = Cesium.Matrix4.inverse(transformMatrix, new Cesium.Matrix4());
 				
 				// 3. 시작점(a), 종료점(b)
+				const aCarto = getCartographicByPixel(pixelX, pixelY, height);
 				const aWC = getCartesianByPixel(pixelX, pixelY, height);
 				const aLC = Cesium.Matrix4.multiplyByPointAsVector(inverseMatrix, aWC, new Cesium.Cartesian3());
-				const bLC = Cesium.Cartesian3.add(aLC, directionVector, new Cesium.Cartesian3());
-				const bWC = Cesium.Matrix4.multiplyByPointAsVector(translationMatrix, bLC, new Cesium.Cartesian3());
+				const bLC = Cesium.Cartesian3.add(aLC, directionVector, new Cesium.Cartesian3()); 
+				const bWC = Cesium.Matrix4.multiplyByPointAsVector(transformMatrix, bLC, new Cesium.Cartesian3());
 
 				return {
 					u, v, w,
@@ -615,7 +640,6 @@
 						if (px < 0 && px > cx && py < 0 && py > cy || p === 0) {
 							break;
 						}
-						
 						const {u,v,w,speed,start,end} = getStreamWC(px, py, p, height);
 						result.push([start, end]);
 						
@@ -624,7 +648,7 @@
 						px = nextX;
 						py = nextY;
 						p = nextPres;
-						height = nextHeight;
+						//height = nextHeight;
 					}
 
 					// 라인 그리기
