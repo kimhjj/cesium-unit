@@ -357,7 +357,12 @@
 			);
 			const _transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(_center);
 			const _inverseMatrix = Cesium.Matrix4.inverse(_transformMatrix, new Cesium.Matrix4());
+			const _startLC = worldToLocal(Cesium.Cartesian3.fromRadians(_startPositionRad.longitude, _startPositionRad.latitude, _startPositionRad.height));
+			const _endLC = worldToLocal(Cesium.Cartesian3.fromRadians(_endPositionRad.longitude, _endPositionRad.latitude, _endPositionRad.height));
+			const _xRangeLC = _endLC.x - _startLC.x;
+			const _yRangeLC = _endLC.y - _startLC.y;
 			
+
 			const viewer = new Cesium.Viewer('cesiumContainer');
 			//viewer.terrainProvider = Cesium.createWorldTerrain();
 			viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -535,18 +540,60 @@
 			function readPNGValue(x, y, pres) {
 				const pixelSize = 1;
 				const targetContext = canvasMap[`canvas_${pres}`].getContext('2d', { willReadFrequently: true });
-				const pixelData = targetContext.getImageData(x, y, pixelSize, pixelSize).data;
+				const pixelData = targetContext.getImageData(x, cy - y, pixelSize, pixelSize).data;
 				const r = pixelData[0];
 				const g = pixelData[1];
 				const b = pixelData[2];
 				return [r, g, b];
 			}
 
-			function readUVVelocity(pointLC) {
-				const [pixelX, pixelY, pixelZ, height] = getPixelByCartesian(pointLC);
+			function getTextureCoordinatesByPosition(pointLC) {
+				return [0.4, 0.5, 500];
+			}
 
-				const [r, g, b] = readPNGValue(pixelX, pixelY, pixelZ);
-				const rangeOfValue = jsonMap[pixelZ].features[0].properties.value;
+			function mix(cartesianA, cartesianB, factor) {
+				const x = cartesianA.x * (1.0 - factor) + cartesianB.x * factor;
+				const y = cartesianA.y * (1.0 - factor) + cartesianB.y * factor;
+				const z = cartesianA.z * (1.0 - factor) + cartesianB.z * factor;
+				return new Cesium.Cartesian3(x, y, z);
+			}
+
+			function getVelocityLinearInterpolation(pointLC) {
+
+				const textureCoordX = (pointLC.x - _startLC.x) / (_endLC.x - _startLC.x);
+				const textureCoordY = (pointLC.y - _startLC.y) / (_endLC.y - _startLC.y);
+
+				const pres = 300;
+				//const [textureCoordX, textureCoordY, pres] = getTextureCoordinatesByPosition(pointLC);
+				const findPixelX = textureCoordX * cx;
+				const findPixelY = textureCoordY * cy;
+
+				// textureCoord와 가장 가까운 픽셀 4점
+				const pixelX0 = Math.floor(findPixelX);		// left
+				const pixelY0 = Math.floor(findPixelY);		// top
+				const pixelX1 = pixelX0 + 1 < cx ? pixelX0 + 1 : pixelX0;	// right
+				const pixelY1 = pixelY0 + 1 < cy ? pixelY0 + 1 : pixelY0;	// bottom
+
+				// tl, tr, bl, br
+				const velocityTopLeft = readUVW(pixelX0, pixelY0, pres);
+				const velocityTopRight = readUVW(pixelX1, pixelY0, pres);
+				const velocityBottomLeft = readUVW(pixelX0, pixelY1, pres);
+				const velocityBottomRight = readUVW(pixelX1, pixelY1, pres);
+
+				// 픽셀 사이즈 (? TODO)
+				const factorX = Math.ceil(((findPixelX < 1.0) ? findPixelX : (findPixelX % pixelX0)) * 10000)/10000;
+				const factorY = Math.ceil(((findPixelY < 1.0) ? findPixelY : (findPixelY % pixelY0)) * 10000)/10000;
+				const velocityTop = mix(velocityTopLeft, velocityTopRight, factorX);
+				const velocityBottom = mix(velocityBottomLeft, velocityBottomRight, factorX);
+				const velocity = mix(velocityTop, velocityBottom, factorY);
+
+				return velocity;
+			}
+
+			
+			function readUVW(pixelX, pixelY, pres) {
+				const [r, g, b] = readPNGValue(pixelX, pixelY, pres);
+				const rangeOfValue = jsonMap[pres].features[0].properties.value;
 
 				const {min:rmin, max:rmax} = rangeOfValue.r;
 				const {min:gmin, max:gmax} = rangeOfValue.g;
@@ -555,35 +602,19 @@
 				const u = r * (rmax - rmin) / 255 + rmin;	// 189: 35.175526 ---> 189: 35.12813403185676
 				const v = g * (gmax - gmin) / 255 + gmin;	// 130: 1.654862  ---> 129: 1.5049083597519815
 				const w = b * (bmax - bmin) / 255 + bmin;	// 110: 0.004244  ---> 110: 0.004136141608743316
-				const speed = Math.sqrt(Math.pow(u, 2) + Math.pow(v, 2) + Math.pow(w, 2));
 
-				return {u, v, w, speed}
+				return new Cesium.Cartesian3(u, v, w);
 			}
 
 			function getAddVector(u, v, w, speed) {
 				const FACTOR = 50 * speed;
 				//const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
-				const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, 0);
-				return directionVector;
+				const directionVector = new Cesium.Cartesian3(u, v, 0);
+				return Cesium.Cartesian3.multiplyByScalar(directionVector, FACTOR, new Cesium.Cartesian3());
 			}
 
 			function moveToByAddVector(startLC, addVector) {
 				return Cesium.Cartesian3.add(startLC, addVector, new Cesium.Cartesian3());
-			}
-
-			function readUVVelocityByPixel(pixelX, pixelY, pixelZ) {
-				const [r, g, b] = readPNGValue(pixelX, pixelY, pixelZ);
-				const rangeOfValue = jsonMap[pixelZ].features[0].properties.value;
-
-				const {min:rmin, max:rmax} = rangeOfValue.r;
-				const {min:gmin, max:gmax} = rangeOfValue.g;
-				const {min:bmin, max:bmax} = rangeOfValue.b;
-
-				const u = r * (rmax - rmin) / 255 + rmin;	// 189: 35.175526 ---> 189: 35.12813403185676
-				const v = g * (gmax - gmin) / 255 + gmin;	// 130: 1.654862  ---> 129: 1.5049083597519815
-				const w = b * (bmax - bmin) / 255 + bmin;	// 110: 0.004244  ---> 110: 0.004136141608743316
-
-				return {u, v, w}
 			}
 			
 			function worldToLocal(worldCartesian) {
@@ -636,13 +667,21 @@
 				return false;
 			}
 
+			function containsBboxLC(cartesianLC) {
+				if(_startLC.x <= cartesianLC.x && cartesianLC.x <= _endLC.x 
+					&& _startLC.y <= cartesianLC.y && cartesianLC.y <= _endLC.y) {
+					return true;
+				}
+				return false;
+			}
+
 			function drawLine() {
 
 				// 임의의 위치 (월드 좌표계)
 				const startPoints = [];
 				for(let x=0; x<601; x=x+50) {
 					for(let y=0; y<781; y=y+50) {
-						const startHeight = MinHeightByPressure[500];
+						const startHeight = MinHeightByPressure[300];
 						const p = Cesium.Cartesian3.fromRadians(
 							_startPositionRad.longitude + (_lonRangeRad) * (x / cx), 
 							_startPositionRad.latitude  + (_latRangeRad) * (y / cy), 
@@ -654,30 +693,37 @@
 
 				startPoints.forEach((startPointWC) => {
 					let count = 0;
-					let pointList = [startPointWC];
-					let currentPointWC = startPointWC;
+					let currentPointLC = worldToLocal(startPointWC);
+					let pointLCList = [currentPointLC];
 
 					// 계산은 LC 좌표로
 					while(count < 30) {
-						if(!containsBbox(currentPointWC)) break;
-						const currentPointLC = worldToLocal(currentPointWC);
-						const {u,v,w,speed} = readUVVelocity(currentPointLC);
+						if(!containsBboxLC(currentPointLC)) break;
+
+						const {x:u, y:v, z:w} = getVelocityLinearInterpolation(currentPointLC);
+						const speed = Math.sqrt(u*u + v*v + w*w);
 
 						if(speed < 1) break;
 						const addVector = getAddVector(u, v, w, speed);
 						const nextPointLC = moveToByAddVector(currentPointLC, addVector);
-						currentPointWC = localToWorld(nextPointLC);
-						pointList.push(currentPointWC);
+						pointLCList.push(nextPointLC);
 
+						currentPointLC = nextPointLC;
 						count++;
 					}
+
+					// LC -> WC
+					const pointWCList = [];
+					pointLCList.forEach(p => {
+						pointWCList.push(localToWorld(p));
+					});
 
 					// 그림은 WC 좌표로
 					const color = Cesium.Color.fromRandom();
 					datasource.entities.add(
 						new Cesium.Entity({
 							polyline: {
-								positions: pointList,
+								positions: pointWCList,
 								width: 10,
 								arcType: Cesium.ArcType.NONE,
 								material: new Cesium.PolylineArrowMaterialProperty(
