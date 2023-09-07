@@ -351,10 +351,6 @@
 				(_startPositionRad.latitude + _endPositionRad.latitude) / 2, 
 				(MaxHeightByPressure[50] + MaxHeightByPressure[1000]) / 2
 			);
-			const _boundingBoxRad = Cesium.Rectangle.fromRadians(
-				_startPositionRad.longitude, _startPositionRad.latitude,
-				_endPositionRad.longitude, _endPositionRad.latitude
-			);
 			const _transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(_center);
 			const _inverseMatrix = Cesium.Matrix4.inverse(_transformMatrix, new Cesium.Matrix4());
 			const _startLC = worldToLocal(Cesium.Cartesian3.fromRadians(_startPositionRad.longitude, _startPositionRad.latitude, _startPositionRad.height));
@@ -465,8 +461,8 @@
 
 				// 위치 이동
 				viewer.camera.flyTo({
-					destination: new Cesium.Cartesian3(-2909946.948014045, 4116503.8643672476, 3955358.7367969714),
-					orientation: {heading: 6.27724075935652,pitch: -0.1832401856765058,roll: 6.282072766364438}
+					destination: new Cesium.Cartesian3(-3515738.2565332716, 4829548.662485715, 4572780.697696924),
+					orientation: {heading: 0.050706744832718975, pitch: -1.5700944849663112, roll: 0}
 				});
 			}
 
@@ -536,6 +532,37 @@
 				$("#label-list-p").val(visiblePressures.join(","));
 			}
 
+			function mix(cartesianA, cartesianB, factor) {
+				const x = cartesianA.x * (1.0 - factor) + cartesianB.x * factor;
+				const y = cartesianA.y * (1.0 - factor) + cartesianB.y * factor;
+				const z = cartesianA.z * (1.0 - factor) + cartesianB.z * factor;
+				return new Cesium.Cartesian3(x, y, z);
+			}
+
+			function multiplyByScalar(cartesian, factor) {
+				return Cesium.Cartesian3.multiplyByScalar(cartesian, factor, new Cesium.Cartesian3());
+			}
+
+			function moveToVector(cartesian, vector) {
+				return Cesium.Cartesian3.add(cartesian, vector, new Cesium.Cartesian3());
+			}
+			
+			function worldToLocal(worldCartesian) {
+				return Cesium.Matrix4.multiplyByPointAsVector(_inverseMatrix, worldCartesian, new Cesium.Cartesian3());
+			}
+
+			function localToWorld(localCartesian) {
+				return Cesium.Matrix4.multiplyByPointAsVector(_transformMatrix, localCartesian, new Cesium.Cartesian3());
+			}
+
+			function containsBboxLC(cartesianLC) {
+				if(_startLC.x <= cartesianLC.x && cartesianLC.x <= _endLC.x 
+					&& _startLC.y <= cartesianLC.y && cartesianLC.y <= _endLC.y) {
+					return true;
+				}
+				return false;
+			}
+
 			// read png value
 			function readPNGValue(x, y, pres) {
 				const pixelSize = 1;
@@ -547,50 +574,6 @@
 				return [r, g, b];
 			}
 
-			function getTextureCoordinatesByPosition(pointLC) {
-				return [0.4, 0.5, 500];
-			}
-
-			function mix(cartesianA, cartesianB, factor) {
-				const x = cartesianA.x * (1.0 - factor) + cartesianB.x * factor;
-				const y = cartesianA.y * (1.0 - factor) + cartesianB.y * factor;
-				const z = cartesianA.z * (1.0 - factor) + cartesianB.z * factor;
-				return new Cesium.Cartesian3(x, y, z);
-			}
-
-			function getVelocityLinearInterpolation(pointLC) {
-
-				const textureCoordX = (pointLC.x - _startLC.x) / (_endLC.x - _startLC.x);
-				const textureCoordY = (pointLC.y - _startLC.y) / (_endLC.y - _startLC.y);
-
-				const pres = 300;
-				//const [textureCoordX, textureCoordY, pres] = getTextureCoordinatesByPosition(pointLC);
-				const findPixelX = textureCoordX * cx;
-				const findPixelY = textureCoordY * cy;
-
-				// textureCoord와 가장 가까운 픽셀 4점
-				const pixelX0 = Math.floor(findPixelX);		// left
-				const pixelY0 = Math.floor(findPixelY);		// top
-				const pixelX1 = pixelX0 + 1 < cx ? pixelX0 + 1 : pixelX0;	// right
-				const pixelY1 = pixelY0 + 1 < cy ? pixelY0 + 1 : pixelY0;	// bottom
-
-				// tl, tr, bl, br
-				const velocityTopLeft = readUVW(pixelX0, pixelY0, pres);
-				const velocityTopRight = readUVW(pixelX1, pixelY0, pres);
-				const velocityBottomLeft = readUVW(pixelX0, pixelY1, pres);
-				const velocityBottomRight = readUVW(pixelX1, pixelY1, pres);
-
-				// 픽셀 사이즈 (? TODO)
-				const factorX = Math.ceil(((findPixelX < 1.0) ? findPixelX : (findPixelX % pixelX0)) * 10000)/10000;
-				const factorY = Math.ceil(((findPixelY < 1.0) ? findPixelY : (findPixelY % pixelY0)) * 10000)/10000;
-				const velocityTop = mix(velocityTopLeft, velocityTopRight, factorX);
-				const velocityBottom = mix(velocityBottomLeft, velocityBottomRight, factorX);
-				const velocity = mix(velocityTop, velocityBottom, factorY);
-
-				return velocity;
-			}
-
-			
 			function readUVW(pixelX, pixelY, pres) {
 				const [r, g, b] = readPNGValue(pixelX, pixelY, pres);
 				const rangeOfValue = jsonMap[pres].features[0].properties.value;
@@ -606,77 +589,46 @@
 				return new Cesium.Cartesian3(u, v, w);
 			}
 
-			function getAddVector(u, v, w, speed) {
-				const FACTOR = 50 * speed;
-				//const directionVector = new Cesium.Cartesian3(u * FACTOR, v * FACTOR, w * FACTOR);
-				const directionVector = new Cesium.Cartesian3(u, v, 0);
-				return Cesium.Cartesian3.multiplyByScalar(directionVector, FACTOR, new Cesium.Cartesian3());
+			function getVelocityLinearInterpolation(pointLC) {
+				const pres = 300;
+
+				const textureCoordX = (pointLC.x - _startLC.x) / (_endLC.x - _startLC.x);
+				const textureCoordY = (pointLC.y - _startLC.y) / (_endLC.y - _startLC.y);
+				const findPixelX = textureCoordX * cx;
+				const findPixelY = textureCoordY * cy;
+
+				// textureCoord와 가장 가까운 픽셀 4점
+				const pixelX0 = Math.floor(findPixelX);		// left
+				const pixelY0 = Math.floor(findPixelY);		// top
+				const pixelX1 = pixelX0 + 1 < cx ? pixelX0 + 1 : pixelX0;	// right
+				const pixelY1 = pixelY0 + 1 < cy ? pixelY0 + 1 : pixelY0;	// bottom
+
+				// tl, tr, bl, br
+				const velocityTopLeft = readUVW(pixelX0, pixelY0, pres);
+				const velocityTopRight = readUVW(pixelX1, pixelY0, pres);
+				const velocityBottomLeft = readUVW(pixelX0, pixelY1, pres);
+				const velocityBottomRight = readUVW(pixelX1, pixelY1, pres);
+
+				// Mix (첫번째 두번째 인자를 factor로 계산)
+				const factorX = Math.ceil(((findPixelX < 1.0) ? findPixelX : (findPixelX % pixelX0)) * 10000)/10000;
+				const factorY = Math.ceil(((findPixelY < 1.0) ? findPixelY : (findPixelY % pixelY0)) * 10000)/10000;
+				const velocityTop = mix(velocityTopLeft, velocityTopRight, factorX);
+				const velocityBottom = mix(velocityBottomLeft, velocityBottomRight, factorX);
+				const velocity = mix(velocityTop, velocityBottom, factorY);
+
+				return velocity;
 			}
 
-			function moveToByAddVector(startLC, addVector) {
-				return Cesium.Cartesian3.add(startLC, addVector, new Cesium.Cartesian3());
-			}
+			// const targetValue = cartographic.height;
+			// for(const key in MinHeightByPressure) {
+			// 	const height = Number(MinHeightByPressure[key]);
+			// 	if(height < targetValue) {
+			// 		pres = key;
+			// 		break;
+			// 	}
+			// }
 			
-			function worldToLocal(worldCartesian) {
-				// world -> local
-				return Cesium.Matrix4.multiplyByPointAsVector(_inverseMatrix, worldCartesian, new Cesium.Cartesian3());
-			}
-
-			function localToWorld(localCartesian) {
-				// local -> world
-				return Cesium.Matrix4.multiplyByPointAsVector(_transformMatrix, localCartesian, new Cesium.Cartesian3());
-			}
-
-			// LC 좌표를 픽셀로 변환
-			function getPixelByCartesian(cartesianLC) {
-				// TODO 정리
-				const cartesian = localToWorld(cartesianLC);
-				const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-				const pixelX = Math.floor((cartographic.longitude - _startPositionRad.longitude) / (_lonRangeRad) * cx);
-				const pixelY = Math.floor((cartographic.latitude - _startPositionRad.latitude) / (_latRangeRad) * cy);
-				
-				let pres = 0;
-				const targetValue = cartographic.height;
-				for(const key in MinHeightByPressure) {
-					const height = Number(MinHeightByPressure[key]);
-					if(height < targetValue) {
-						pres = key;
-						break;
-					}
-				}
-
-				return [pixelX, pixelY, pres, targetValue];
-			}
-
-			// 픽셀을 WC 좌표로 변환
-			function getCartesianByPixel(pixelX, pixelY, height) {
-				// TODO: 말이 안됨. 고쳐야함
-				const cartographic = Cesium.Cartographic.fromRadians(
-					_startPositionRad.longitude + (_lonRangeRad) * (pixelX / cx), 
-					_startPositionRad.latitude  + (_latRangeRad) * (pixelY / cy), 
-					height
-				);
-				return cartographicToCartesian(cartographic);
-			}
-
-			function containsBbox(cartesianWC) {
-				const positionRad = cartesianToCartographic(cartesianWC);
-				if(Cesium.Rectangle.contains(_boundingBoxRad, positionRad)) {
-					return true;
-				}
-				return false;
-			}
-
-			function containsBboxLC(cartesianLC) {
-				if(_startLC.x <= cartesianLC.x && cartesianLC.x <= _endLC.x 
-					&& _startLC.y <= cartesianLC.y && cartesianLC.y <= _endLC.y) {
-					return true;
-				}
-				return false;
-			}
-
 			function drawLine() {
-
 				// 임의의 위치 (월드 좌표계)
 				const startPoints = [];
 				for(let x=0; x<601; x=x+50) {
@@ -700,14 +652,15 @@
 					while(count < 30) {
 						if(!containsBboxLC(currentPointLC)) break;
 
-						const {x:u, y:v, z:w} = getVelocityLinearInterpolation(currentPointLC);
-						const speed = Math.sqrt(u*u + v*v + w*w);
-
+						const velocity = getVelocityLinearInterpolation(currentPointLC);	// u, v, w
+						const speed = Math.sqrt(velocity.x*velocity.x + velocity.y*velocity.y + velocity.z*velocity.z);
 						if(speed < 1) break;
-						const addVector = getAddVector(u, v, w, speed);
-						const nextPointLC = moveToByAddVector(currentPointLC, addVector);
-						pointLCList.push(nextPointLC);
 
+						const factor = 20 * speed;
+						const addVector = multiplyByScalar(velocity, factor);
+						const nextPointLC = moveToVector(currentPointLC, addVector);
+						
+						pointLCList.push(nextPointLC);
 						currentPointLC = nextPointLC;
 						count++;
 					}
