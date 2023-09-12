@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        // Your access token can be found at: https://ion.cesium.com/tokens.
+        // Replace `your_access_token` with your Cesium ion access token.
+
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDBjMzVmMi0yOThjLTQ3M2ItYTM0YS00OWJmMTQ2YmFiMTUiLCJpZCI6MTI5NDU5LCJpYXQiOjE2NzkzMDAxNzd9.956ZT5c6LCxz4_KlVtH6yk85gd3pjCNEZufGKoen5tI';
+
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain()
+        });
+
+        const loadLayer = async () => {
+            const cv = {
+                id: 'ujdev:wh_mdc',
+                name: '약품창고',
+                provider: 'WebMapServiceImageryProvider',
+                url: `http://175.197.92.213:10503/geoserver/wms`,
+                style: "wh_mdc",
+                group: '이재민구호소'
+            }
+            const style = await loadSld("wh_mdc");
+
+            viewer.imageryLayers.addImageryProvider(
+                new Cesium.WebMapServiceImageryProvider({
+                    url: cv.url,
+                    layers: cv.id,
+                    enablePickFeatures: false,
+                    minimumLevel: 2,
+                    parameters : {
+                        format : 'image/png',
+                        transparent : 'true',
+                        SLD_BODY: style
+                    }
+                }), (viewer.imageryLayers.length)
+            );
+        }
+
+        const loadSld = async (name) => {
+            // const response = await fetch(`./sld/${name}.xml`); <-- 이것도 가능
+            const response = await fetch(`http://127.0.0.1:5502/sld/${name}.sld`);
+            return await response.text();
+        }
+
+        loadLayer();
+
+        viewer.camera.flyTo({
+            destination: new Cesium.Cartesian3(-3339151.360213364, 4100903.729322578, 3678376.1880340194),
+            orientation: {
+                heading: 6.229972501034226,
+                pitch: -0.912419698356822,
+                roll: 6.283157376159688
+            }
+        });
+
+    </script>
+    </div>
+</body>
+
+</html>
