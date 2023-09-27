@@ -342,23 +342,43 @@
 			const dy = 1500;
 			const cx = 602;
 			const cy = 781;
+
+			// Rad
 			const _startPositionRad = moveXY(sx, sy, 0, 0, 0);
 			const _endPositionRad = moveXY(sx, sy, 0, dx * cx, dy * cy);
 			const _lonRangeRad = (_endPositionRad.longitude - _startPositionRad.longitude);
 			const _latRangeRad = (_endPositionRad.latitude - _startPositionRad.latitude);
-			const _center = Cesium.Cartesian3.fromRadians(
-				(_startPositionRad.longitude + _endPositionRad.longitude) / 2, 
-				(_startPositionRad.latitude + _endPositionRad.latitude) / 2, 
-				(MaxHeightByPressure[50] + MaxHeightByPressure[1000]) / 2
+			const _centerRad = Cesium.Cartesian3.midpoint(
+				new Cesium.Cartesian3(_startPositionRad.longitude, _startPositionRad.latitude, 60.0),
+				new Cesium.Cartesian3(_endPositionRad.longitude, _endPositionRad.latitude, 20000.0),
+				new Cesium.Cartesian3()
 			);
-			const _transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(_center);
-			const _inverseMatrix = Cesium.Matrix4.inverse(_transformMatrix, new Cesium.Matrix4());
-			const _startLC = worldToLocal(Cesium.Cartesian3.fromRadians(_startPositionRad.longitude, _startPositionRad.latitude, _startPositionRad.height));
-			const _endLC = worldToLocal(Cesium.Cartesian3.fromRadians(_endPositionRad.longitude, _endPositionRad.latitude, _endPositionRad.height));
-			const _xRangeLC = _endLC.x - _startLC.x;
-			const _yRangeLC = _endLC.y - _startLC.y;
-			
+			const _centerRadWC = Cesium.Cartesian3.fromRadians(_centerRad.x, _centerRad.y, _centerRad.z);
 
+			// Deg
+			const _startPositionLonDeg = Cesium.Math.toDegrees(_startPositionRad.longitude);
+			const _startPositionLatDeg = Cesium.Math.toDegrees(_startPositionRad.latitude);
+			const _endPositionLonDeg = Cesium.Math.toDegrees(_endPositionRad.longitude);
+			const _endPositionLatDeg = Cesium.Math.toDegrees(_endPositionRad.latitude);
+			const _centerDeg = Cesium.Cartesian3.midpoint(
+				new Cesium.Cartesian3(_startPositionLonDeg, _startPositionLatDeg, 60.0),
+				new Cesium.Cartesian3(_endPositionLonDeg, _endPositionLatDeg, 20000.0),
+				new Cesium.Cartesian3()
+			);
+			const _centerDegWC = Cesium.Cartesian3.fromDegrees(_centerDeg.x, _centerDeg.y, _centerDeg.z);
+
+			// matrix
+			const _transformMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(_centerRadWC);
+			const _inverseMatrix = Cesium.Matrix4.inverseTransformation(_transformMatrix, new Cesium.Matrix4());
+
+			// bbox
+			const _startWC = Cesium.Cartesian3.fromRadians(_startPositionRad.longitude, _startPositionRad.latitude, 60.0);
+			const _endWC = Cesium.Cartesian3.fromRadians(_endPositionRad.longitude, _endPositionRad.latitude, 20000.0);
+			const _startLC = Cesium.Matrix4.multiplyByPoint(_inverseMatrix, _startWC, new Cesium.Cartesian3());
+			const _endLC = Cesium.Matrix4.multiplyByPoint(_inverseMatrix, _endWC, new Cesium.Cartesian3());
+			// const _centerLC = Cesium.Matrix4.multiplyByPoint(_inverseMatrix, _centerRadWC, new Cesium.Cartesian3()); => 0, 0, 0
+			
+			
 			const viewer = new Cesium.Viewer('cesiumContainer');
 			//viewer.terrainProvider = Cesium.createWorldTerrain();
 			viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -548,11 +568,11 @@
 			}
 			
 			function worldToLocal(worldCartesian) {
-				return Cesium.Matrix4.multiplyByPointAsVector(_inverseMatrix, worldCartesian, new Cesium.Cartesian3());
+				return Cesium.Matrix4.multiplyByPoint(_inverseMatrix, worldCartesian, new Cesium.Cartesian3());
 			}
 
 			function localToWorld(localCartesian) {
-				return Cesium.Matrix4.multiplyByPointAsVector(_transformMatrix, localCartesian, new Cesium.Cartesian3());
+				return Cesium.Matrix4.multiplyByPoint(_transformMatrix, localCartesian, new Cesium.Cartesian3());
 			}
 
 			function containsBboxLC(cartesianLC) {
@@ -589,102 +609,183 @@
 				return new Cesium.Cartesian3(u, v, w);
 			}
 
-			function getVelocityLinearInterpolation(pointLC) {
-				const pres = 300;
+			function getPresByCoordLC(pointLC) {
 
+				return pres;
+			}
+
+			function getUpperPres(pres) {
+
+			}
+			function findZ(findPixelZ) {
+
+				return 0;
+			}
+
+			function nextFindZ(findPixelZ) {
+
+
+				return 0+1;
+			}
+
+			function getVelocityLinearInterpolation(pointLC) {
+
+				// x, y 계산
 				const textureCoordX = (pointLC.x - _startLC.x) / (_endLC.x - _startLC.x);
 				const textureCoordY = (pointLC.y - _startLC.y) / (_endLC.y - _startLC.y);
 				const findPixelX = textureCoordX * cx;
 				const findPixelY = textureCoordY * cy;
-
 				// textureCoord와 가장 가까운 픽셀 4점
 				const pixelX0 = Math.floor(findPixelX);		// left
-				const pixelY0 = Math.floor(findPixelY);		// top
 				const pixelX1 = pixelX0 + 1 < cx ? pixelX0 + 1 : pixelX0;	// right
+				const pixelY0 = Math.floor(findPixelY);		// top
 				const pixelY1 = pixelY0 + 1 < cy ? pixelY0 + 1 : pixelY0;	// bottom
 
-				// tl, tr, bl, br
-				const velocityTopLeft = readUVW(pixelX0, pixelY0, pres);
-				const velocityTopRight = readUVW(pixelX1, pixelY0, pres);
-				const velocityBottomLeft = readUVW(pixelX0, pixelY1, pres);
-				const velocityBottomRight = readUVW(pixelX1, pixelY1, pres);
+				// z 계산
+				// const pixelZUp = 300;
+				let pixelZUp = null;
+				let pixelZDown = null;
+				Pressures.reduce((prev, curr) => {
+					const maxHeight = MaxHeightByPressure[prev];
+					const minHeight = MaxHeightByPressure[curr];
+					if(minHeight <= pointLC.z && pointLC.z < maxHeight) {
+						pixelZUp = prev ? prev : curr;
+						pixelZDown = curr ? curr : prev;
+					}
+					return curr;
+				}, null);
+				const findPixelZ = (pointLC.z - MaxHeightByPressure[pixelZDown]) / (MaxHeightByPressure[pixelZUp] - MaxHeightByPressure[pixelZDown]);
 
-				// Mix (첫번째 두번째 인자를 factor로 계산)
-				const factorX = Math.ceil(((findPixelX < 1.0) ? findPixelX : (findPixelX % pixelX0)) * 10000)/10000;
-				const factorY = Math.ceil(((findPixelY < 1.0) ? findPixelY : (findPixelY % pixelY0)) * 10000)/10000;
-				const velocityTop = mix(velocityTopLeft, velocityTopRight, factorX);
-				const velocityBottom = mix(velocityBottomLeft, velocityBottomRight, factorX);
-				const velocity = mix(velocityTop, velocityBottom, factorY);
+				if(pixelZUp === null && pixelZDown === null) {
+					return null;
+				}
+
+				// tl, tr, bl, br (up)
+				const velocityTopLeftUp = readUVW(pixelX0, pixelY0, pixelZUp);
+				const velocityTopRightUp = readUVW(pixelX1, pixelY0, pixelZUp);
+				const velocityBottomLeftUp = readUVW(pixelX0, pixelY1, pixelZUp);
+				const velocityBottomRightUp = readUVW(pixelX1, pixelY1, pixelZUp);
+
+				// tl, tr, bl, br (down)
+				const velocityTopLeftDown = readUVW(pixelX0, pixelY0, pixelZDown);
+				const velocityTopRightDown = readUVW(pixelX1, pixelY0, pixelZDown);
+				const velocityBottomLeftDown = readUVW(pixelX0, pixelY1, pixelZDown);
+				const velocityBottomRightDown = readUVW(pixelX1, pixelY1, pixelZDown);
+
+				// var st = s*texWidth;
+				// var tt = t*texHeight;
+				// var fx = Math.ceil(((st < 1.0) ? st : (st % Math.floor(st))) * 10000)/10000;
+				// var fy = Math.ceil(((tt < 1.0) ? tt : (tt % Math.floor(tt))) * 10000)/10000;
+
+				// factor
+				const findPixelFloorX = Math.floor(findPixelX);
+				const findPixelFloorY = Math.floor(findPixelY);
+				const factorX = Math.ceil(((findPixelX < 1.0) ? findPixelX : (findPixelX % findPixelFloorX)) * 10000)/10000;
+				const factorY = Math.ceil(((findPixelY < 1.0) ? findPixelY : (findPixelY % findPixelFloorY)) * 10000)/10000;
+				const factorZ = Math.ceil(((findPixelZ < 1.0) ? findPixelZ : (findPixelZ % MaxHeightByPressure[pixelZUp])) * 10000)/10000;
+
+				// Mix (첫번째, 두번째 인자를 factor로 계산)
+				// TODO: Cesium.Cartesian3.lerp(velocityUpTopLeft, velocityUpTopRight, factorX, new Cesium.Cartesian3())
+				const velocityTopUp = mix(velocityTopLeftUp, velocityTopRightUp, factorX);
+				const velocityBottomUp = mix(velocityBottomLeftUp, velocityBottomRightUp, factorX);
+				const velocityUp = mix(velocityTopUp, velocityBottomUp, factorY);
+				const velocityTopDown = mix(velocityTopLeftDown, velocityTopRightDown, factorX);
+				const velocityBottomDown = mix(velocityBottomLeftDown, velocityBottomRightDown, factorX);
+				const velocityDown = mix(velocityTopDown, velocityBottomDown, factorY);
+				const velocity = mix(velocityUp, velocityDown, 1 - factorZ);
 
 				return velocity;
 			}
-
-			// const targetValue = cartographic.height;
-			// for(const key in MinHeightByPressure) {
-			// 	const height = Number(MinHeightByPressure[key]);
-			// 	if(height < targetValue) {
-			// 		pres = key;
-			// 		break;
-			// 	}
-			// }
 			
 			function drawLine() {
-				// 임의의 위치 (월드 좌표계)
 				const startPoints = [];
-				for(let x=0; x<601; x=x+50) {
-					for(let y=0; y<781; y=y+50) {
-						const startHeight = MinHeightByPressure[300];
-						const p = Cesium.Cartesian3.fromRadians(
-							_startPositionRad.longitude + (_lonRangeRad) * (x / cx), 
-							_startPositionRad.latitude  + (_latRangeRad) * (y / cy), 
-							startHeight
-						)
-						startPoints.push(p);
+
+				// 임의의 위치 LC
+				const stepScale = 100;
+				const lenXPerPixel = (_endLC.x - _startLC.x) / cx;
+				const lenYPerPixel = (_endLC.y - _startLC.y) / cy;
+				const lenSizePixel = Math.sqrt(lenXPerPixel*lenXPerPixel + lenYPerPixel*lenYPerPixel) * 0.01;
+				
+				const stepX = lenXPerPixel * stepScale;
+				const stepY = lenYPerPixel * stepScale;
+				// const arrHeight = [MaxHeightByPressure[300], MaxHeightByPressure[500], MaxHeightByPressure[700], MaxHeightByPressure[1000]];
+				const arrHeight = [MaxHeightByPressure[300], MaxHeightByPressure[350]];
+				for(let col = _startLC.x; col < _endLC.x; col = col + stepX) {
+					for(let row = _startLC.y; row < _endLC.y; row = row + stepY) {
+						arrHeight.forEach((height)=> {
+							const pointLC = new Cesium.Cartesian3(col, row, height);
+							startPoints.push(pointLC);
+						});
 					}
 				}
 
-				startPoints.forEach((startPointWC) => {
+				startPoints.forEach((startPointLC) => {
 					let count = 0;
-					let currentPointLC = worldToLocal(startPointWC);
+					let currentPointLC = startPointLC;
 					let pointLCList = [currentPointLC];
 
 					// 계산은 LC 좌표로
-					while(count < 30) {
+					while(count < 2500) {
 						if(!containsBboxLC(currentPointLC)) break;
 
 						const velocity = getVelocityLinearInterpolation(currentPointLC);	// u, v, w
-						const speed = Math.sqrt(velocity.x*velocity.x + velocity.y*velocity.y + velocity.z*velocity.z);
-						if(speed < 1) break;
+						if(velocity === null) break;
 
-						const factor = 20 * speed;
-						const addVector = multiplyByScalar(velocity, factor);
-						const nextPointLC = moveToVector(currentPointLC, addVector);
+						const speed = Math.sqrt(velocity.x*velocity.x + velocity.y*velocity.y + velocity.z*velocity.z);
+						if(speed < 0.1) {
+							console.log('speed', speed, 'count', count);
+							break;
+						}
+
+						const factor = 0.2 * speed;
+						const addVector = Cesium.Cartesian3.multiplyByScalar(velocity, factor, new Cesium.Cartesian3());
+						const addVectorSize = Math.sqrt(addVector.x*addVector.x + addVector.y*addVector.y);
+						let addVectorFactor = addVector;
+
+						// TODO
+						if(lenSizePixel > addVectorSize) {
+							const f = lenSizePixel/addVectorSize;
+							addVectorFactor = new Cesium.Cartesian3(addVector.x * f , addVector.y * f, addVector.z);
+						}
+
+						if(count==0) {
+							//console.log('addVector', addVector, 'addVectorFactor', addVectorFactor);
+						}
+
+						const nextPointLC = Cesium.Cartesian3.add(currentPointLC, addVectorFactor, new Cesium.Cartesian3());
 						
-						pointLCList.push(nextPointLC);
+						if(count%100 === 0) {
+							pointLCList.push(nextPointLC);	
+						}
+
 						currentPointLC = nextPointLC;
 						count++;
 					}
 
 					// LC -> WC
 					const pointWCList = [];
-					pointLCList.forEach(p => {
+					pointLCList.forEach((p, i) => {
+						p.z = p.z * heightScale;
 						pointWCList.push(localToWorld(p));
 					});
 
 					// 그림은 WC 좌표로
-					const color = Cesium.Color.fromRandom();
-					datasource.entities.add(
-						new Cesium.Entity({
-							polyline: {
-								positions: pointWCList,
-								width: 10,
-								arcType: Cesium.ArcType.NONE,
-								material: new Cesium.PolylineArrowMaterialProperty(
-									Cesium.Color.fromAlpha(color, 1)
-								),
-							}
-						})
-					);
+					drawPolyline(pointWCList);
+				});
+			}
+
+			function drawPolyline(pointWCList) {
+				const color = Cesium.Color.fromRandom();
+				const startTime = Cesium.JulianDate.now();
+				datasource.entities.add({
+					polyline: {
+						positions: pointWCList,
+						width: 10,
+						arcType: Cesium.ArcType.NONE,
+						material: new Cesium.PolylineArrowMaterialProperty(
+							Cesium.Color.fromAlpha(color, 1)
+						),
+					}
 				});
 			}
 
