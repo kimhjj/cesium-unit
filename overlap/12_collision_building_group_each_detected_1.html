@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Collision Detection with Cesium and Turf.js</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.6.0/proj4.js"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+    <style>
+        #cesiumContainer {
+            width: 100%;
+            height: 90vh;
+            display: block;
+        }
+        #checkOverlapButton, #checkOverlapButton2 {
+            margin: 10px;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #checkOverlapButton {
+            background-color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+    <button id="checkOverlapButton">검증</button>
+    <script type="module">
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODZkZDc3NS00M2IzLTRlNDctYTJlOC02ODhiMmYyMTcxYTkiLCJpZCI6MTI5NDU5LCJpYXQiOjE3MjE5Nzk0NjV9.kwcLJXbkd3S3k-45KHEJhQS0Xpp5mTkmsPSwp1zqnRQ';
+
+        let points = [];
+        let rectangleEntity = null;
+        let mousePointEntity = null;
+        let selectedFeatures = [];
+        let selectedBbox;
+        let tileset;
+
+        const terrainURL = "http://175.197.92.213:10502/ujdt23_231209";
+
+        const dataURL = 'http://localhost:5500/cesium-test/data/Cottage_4326_adjusted.geojson';
+        const dataURL3 = 'http://localhost:5500/cesium-test/data/Bambo_House4326_adjusted.geojson';
+        const dataURL4 = 'http://localhost:5500/cesium-test/data/house4326_adjusted.geojson';
+
+        const dataURL2 = 'http://localhost:5500/cesium-test/data/line4326_roof.geojson';
+
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: await Cesium.CesiumTerrainProvider.fromUrl(terrainURL)
+        });
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+        
+        const dataSourceHouse = new Cesium.CustomDataSource('HOUSE');
+        const dataSourceLines = new Cesium.CustomDataSource('LINE');
+        viewer.dataSources.add(dataSourceHouse);
+        viewer.dataSources.add(dataSourceLines);
+        
+        Cesium.GeoJsonDataSource.load(dataURL2, {clampToGround: true, stroke: Cesium.Color.BLUE, fill: Cesium.Color.WHITE.withAlpha(0.7)})
+        .then((dataSource) => {
+            dataSource.entities.values.forEach((entity)=>{
+                const polylinePositions = entity.polyline.positions.getValue();
+
+                // 각 좌표의 높이 140미터 올리기
+                const elevatedPositions = polylinePositions.map(position => {
+                    const cartographic = Cesium.Cartographic.fromCartesian(position);
+                    return Cesium.Cartesian3.fromRadians(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        cartographic.height + 100000 // 140m 높이 추가
+                    );
+                });
+
+                const corridor = makeCorridor(elevatedPositions);
+                dataSourceLines.entities.add(corridor);
+            });
+            viewer.flyTo(dataSourceLines.entities);
+        }).catch((error) => {
+            console.error('GeoJSON 로딩 오류: ', error);
+        });
+        
+        const houseOptions = {
+            clampToGround: true, 
+            stroke: Cesium.Color.BLACK, 
+            fill: Cesium.Color.WHITE.withAlpha(0.7)
+        }
+
+        Promise.all([
+            Cesium.GeoJsonDataSource.load(dataURL, houseOptions),
+            Cesium.GeoJsonDataSource.load(dataURL3, houseOptions),
+            Cesium.GeoJsonDataSource.load(dataURL4, houseOptions),
+        ]).then((loadedDataSources) => {
+            loadedDataSources.forEach((dataSource, index) => {
+                const groupName = `Group_${index + 1}`;
+
+                dataSource.entities.values.forEach((entity) => {
+                    entity.properties.addProperty('group');
+                    entity.properties.group = groupName;
+                    dataSourceHouse.entities.add(entity);
+                });
+            })
+        }).catch((error) => {
+            console.error('GeoJSON 로딩 오류: ', error);
+        });
+
+        const makeCorridor = (positions) => {
+            return {
+                corridor: {
+                    positions: positions,
+                    width: 0.02,
+                    // extrudedHeight: 130,
+                    extrudedHeight: 133,
+                    material: Cesium.Color.BLUE.withAlpha(0.2),
+                }
+            };        
+        };
+
+        function resetTarget() {
+            dataSourceHouse.entities.values.forEach(entity => {
+                entity.polygon.material = Cesium.Color.WHITE.withAlpha(0.7);
+            });
+        }
+
+        async function checkOverlaps() {
+            let count = 0;
+            let overlapDetected = false;
+            resetTarget();
+            
+            const checkedGroups = new Set(); // 충돌이 발생한 그룹을 저장할 Set
+
+            for (let lineIndex = 0; lineIndex < dataSourceLines.entities.values.length; lineIndex++) {
+                const lineEntity = dataSourceLines.entities.values[lineIndex];
+                
+                for (let houseIndex = 0; houseIndex < dataSourceHouse.entities.values.length; houseIndex++) {
+                    const houseEntity = dataSourceHouse.entities.values[houseIndex];
+
+                    // 폴리곤 개별 확인
+                    if (houseEntity.polygon) {
+                        const intersection = await check3DIntersection(lineEntity, houseEntity, houseIndex);
+                        if (intersection) {
+                            overlapDetected = true;
+                            count++;
+                            houseEntity.polygon.material = Cesium.Color.RED.withAlpha(0.5);
+                        }
+                    }
+                }
+            }
+
+            alert(count + "건 충돌");
+        }
+
+        // 3D 충돌 검사 함수
+        async function check3DIntersection(lineEntity, houseEntity, i) {
+            const corridorPositions = lineEntity.corridor.positions.getValue(Cesium.JulianDate.now());
+            const polygonPositions = houseEntity.polygon.hierarchy.getValue(Cesium.JulianDate.now()).positions;
+
+            const isIntersection = areLineAndPolygonOverlapping(corridorPositions, polygonPositions);
+            return isIntersection;
+        }
+
+        function areLineAndPolygonOverlapping(line3D, polygon3D) {
+            for (let i = 0; i < line3D.length - 1; i++) {
+                for (let j = 0; j < polygon3D.length - 1; j++) {
+                    if (doLineSegmentsIntersect3D(line3D[i], line3D[i + 1], polygon3D[j], polygon3D[j + 1])) {
+                        return true; // 선분이 교차하므로 중첩됨
+                    }
+                }
+            }
+            return false; // 중첩 없음
+        }
+
+        function doLineSegmentsIntersect3D(p1, p2, q1, q2) {
+            const p = Cesium.Cartesian3.subtract(p2, p1, new Cesium.Cartesian3());
+            const q = Cesium.Cartesian3.subtract(q2, q1, new Cesium.Cartesian3());
+            const crossPq = Cesium.Cartesian3.cross(p, q, new Cesium.Cartesian3());
+            const r = Cesium.Cartesian3.magnitudeSquared(crossPq);
+
+            if (r === 0) return false; // 선분이 평행하거나 일치함
+
+            const qmp = Cesium.Cartesian3.subtract(q1, p1, new Cesium.Cartesian3());
+            const t = Cesium.Cartesian3.dot(Cesium.Cartesian3.cross(qmp, q, new Cesium.Cartesian3()), crossPq) / r;
+            const u = Cesium.Cartesian3.dot(Cesium.Cartesian3.cross(qmp, p, new Cesium.Cartesian3()), crossPq) / r;
+
+            return (t >= 0 && t <= 1 && u >= 0 && u <= 1);
+        }
+
+        document.getElementById('checkOverlapButton').addEventListener('click', checkOverlaps);
+
+    </script>
+</body>
+</html>

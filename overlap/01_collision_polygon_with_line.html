@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Collision Example with Spatial Analysis</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+    <style>
+        #cesiumContainer {
+            width: 100%;
+            height: 90vh;
+            display: block;
+        }
+        #checkOverlapButton {
+            margin: 10px;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+    <button id="checkOverlapButton">Check Overlap</button>
+    <script type="module">
+		Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJmMmYyMTg2MC05MmEzLTQ5M2ItYTRhMS02MjVlYzZlMTA3N2UiLCJpZCI6MzA1NywiaWF0IjoxNzA3OTg4NDM2fQ.ueW30N6i7eC3Byxs7v0EhZqvSBd2o6TQPoNV2FCOnxM'
+
+        var viewer = new Cesium.Viewer('cesiumContainer', {
+            terrain: Cesium.Terrain.fromWorldTerrain(),
+        });
+
+        // Add boxes
+        const box1 = viewer.entities.add({
+            id: 'box1',
+            name: 'Box1',
+            position: Cesium.Cartesian3.fromDegrees(129.2435, 35.5272, 50),
+            box: {
+                dimensions: new Cesium.Cartesian3(100.0, 50.0, 100.0),
+                material: Cesium.Color.BLUE.withAlpha(0.5)
+            }
+        });
+
+        const box2 = viewer.entities.add({
+            id: 'box2',
+            name: 'Box2',
+            position: Cesium.Cartesian3.fromDegrees(129.2438, 35.5280, 50),
+            box: {
+                dimensions: new Cesium.Cartesian3(100.0, 50.0, 100.0),
+                material: Cesium.Color.BLUE.withAlpha(0.5)
+            }
+        });
+
+        const positions = Cesium.Cartesian3.fromDegreesArrayHeights([
+            129.242941, 35.527481, 0,
+            129.244288, 35.526977, 0,
+            129.244720, 35.526789, 0
+        ]);
+
+        const corridor = viewer.entities.add({
+            corridor: {
+                positions: positions,
+                width: 0.02,
+                extrudedHeight: 100.0,
+                material: Cesium.Color.WHITE.withAlpha(0.7)
+            }
+        });
+
+        viewer.zoomTo(viewer.entities);
+
+        // Convert corridor positions to GeoJSON Polygon
+        const corridorPolygon = turf.polygon([[
+            [129.242941, 35.527481],
+            [129.244288, 35.526977],
+            [129.244720, 35.526789],
+            [129.242941, 35.527481],
+            [129.242941, 35.527481]
+        ]]);
+
+        // Convert boxes to GeoJSON Polygons (approximating the boxes as flat polygons on the ground)
+        const boxes = [
+            {
+                id: 'box1',
+                polygon: turf.polygon([[
+                    [129.2434, 35.5271],
+                    [129.24360000000001, 35.5271],
+                    [129.24360000000001, 35.527300000000004],
+                    [129.2434, 35.527300000000004],
+                    [129.2434, 35.5271]
+                ]])
+            },
+            {
+                id: 'box2',
+                polygon: turf.polygon([[
+                    [129.2437, 35.5279],
+                    [129.2439, 35.5279],
+                    [129.2439, 35.5281],
+                    [129.2437, 35.5281],
+                    [129.2437, 35.5279]
+                ]])
+            }
+        ];
+
+        // Function to check for overlaps
+        function checkOverlaps() {
+            let overlapDetected = false;
+            boxes.forEach(box => {
+                // Debugging statements to check the polygons
+                console.log('Corridor Polygon:', JSON.stringify(corridorPolygon));
+                console.log(`Box ${box.id} Polygon:`, JSON.stringify(box.polygon));
+
+                const intersection = turf.booleanIntersects(corridorPolygon, box.polygon);
+                if (intersection) {
+                    overlapDetected = true;
+                    // Change color of the intersecting box to red
+                    viewer.entities.getById(box.id).box.material = Cesium.Color.RED.withAlpha(0.5);
+                }
+            });
+
+            if (overlapDetected) {
+                alert("Overlap detected!");
+            } else {
+                alert("No overlap detected.");
+            }
+        }
+
+        // Add event listener to the button
+        document.getElementById('checkOverlapButton').addEventListener('click', checkOverlaps);
+    </script>
+</body>
+</html>
